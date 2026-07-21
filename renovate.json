@@ -1,0 +1,16 @@
+{
+  "extends": ["config:recommended"],
+  "baseBranchPatterns": [
+    "development"
+  ],
+  "labels": ["type:chore"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "workflow actions"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ "${#staged_files[@]}" -eq 0 ]]; then
+  exit 0
+fi
+
+python_bin=""
+if [[ -x ".venv/bin/python" ]]; then
+  python_bin=".venv/bin/python"
+elif command -v python3 >/dev/null 2>&1 && python3 -m ruff --version >/dev/null 2>&1; then
+  python_bin="python3"
+fi
+
+cleanup_targets=()
+python_targets=()
+
+for path in "${staged_files[@]}"; do
+  [[ -f "$path" ]] || continue
+
+  if LC_ALL=C grep -Iq . "$path"; then
+    cleanup_targets+=("$path")
+  fi
+
+  case "$path" in
+    *.py)
+      python_targets+=("$path")
+      ;;
+  esac
+done
+
+for path in "${cleanup_targets[@]}"; do
+  perl -0pi -e 's/\r\n/\n/g; s/\r/\n/g; s/[ \t]+\n/\n/g' "$path"
+
+  if [[ -s "$path" ]] && [[ "$(tail -c 1 "$path" 2>/dev/null || true)" != $'\n' ]]; then
+    printf '\n' >> "$path"
+  fi
+
+  git add "$path"
+done
+
+if [[ "${#python_targets[@]}" -gt 0 ]]; then
+  if [[ -z "$python_bin" ]]; then
+    echo "Python formatting skipped: install dev dependencies with bash scripts/setup.sh" >&2
+    exit 1
+  fi
+
+  "$python_bin" -m ruff format "${python_targets[@]}"
+  "$python_bin" -m ruff check --fix "${python_targets[@]}"
+  git add "${python_targets[@]}"
+fi
+
+exit 0

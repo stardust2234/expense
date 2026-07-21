@@ -1,0 +1,34 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Renovate secret
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RENOVATE_TOKEN:-}" ]]; then
+            echo "RENOVATE_TOKEN secret is missing or unavailable to this workflow." >&2
+            exit 1
+          fi
+
+      - name: Run Renovate
+        env:
+          RENOVATE_ENDPOINT: ${{ github.api_url }}
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e RENOVATE_PLATFORM="gitea" \
+            -e RENOVATE_ENDPOINT \
+            -e RENOVATE_TOKEN \
+            -e RENOVATE_REPOSITORIES="${{ gitea.repository }}" \
+            -e LOG_LEVEL="info" \
+            ghcr.io/renovatebot/renovate:latest

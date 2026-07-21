@@ -1,0 +1,53 @@
+name: Bootstrap Repository Governance
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: Repository name to apply governance to
+        required: true
+        type: string
+      organization:
+        description: Gitea organization or owner
+        required: true
+        default: your-org
+        type: string
+      main_branch:
+        description: Stable branch to protect after the first release
+        required: true
+        default: main
+        type: string
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Resolve repositories
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ inputs.target_repo }}" ]]; then
+            echo "target_repo is required" >&2
+            exit 1
+          fi
+          echo "${{ inputs.target_repo }}" > repos.txt
+
+      - name: Protect stable branch if it exists
+        env:
+          RENOVATE_ENDPOINT: ${{ github.api_url }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r repo; do
+            [[ -z "$repo" ]] && continue
+            bash .gitea/scripts/apply-branch-protection.sh \
+              --skip-missing \
+              "${{ inputs.organization }}" \
+              "$repo" \
+              "${{ inputs.main_branch }}"
+          done < repos.txt

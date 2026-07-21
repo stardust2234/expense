@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [[ "$branch" == "main" ]]; then
+  echo "Direct pushes to 'main' are blocked by local policy."
+  echo "Do daily work on 'development' and promote only stable releases to 'main'."
+  exit 1
+fi
+
+exit 0
