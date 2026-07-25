@@ -1,15 +1,22 @@
 import type {
+  AllowanceType,
   Category,
   CategoryTotal,
-  DashboardSummary,
+  Commitment,
+  CycleAllowance,
   HealthResponse,
   ImportBatch,
   Merchant,
   MerchantAlias,
   MonthlyTotal,
+  PaymentPeriod,
+  PaymentCycle,
   RecurringExpense,
+  RecurringOpportunity,
   ReviewQueueResponse,
   Rule,
+  SafeSpendingForecast,
+  SpendingPriority,
   Transaction,
 } from "../types/api";
 
@@ -62,17 +69,34 @@ export const api = {
     request<ImportBatch>(`/imports/${batchId}/retry`, { method: "POST" }),
 
   categories: async () => (await request<{ items: Category[] }>("/categories")).items,
-  createCategory: (name: string, parentCategoryId: number | null) =>
+  createCategory: (
+    name: string,
+    parentCategoryId: number | null,
+    defaultPriority: SpendingPriority,
+  ) =>
     request<Category>("/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, parent_category_id: parentCategoryId }),
+      body: JSON.stringify({
+        name,
+        parent_category_id: parentCategoryId,
+        default_priority: defaultPriority,
+      }),
     }),
-  updateCategory: (id: number, name: string, parentCategoryId: number | null) =>
+  updateCategory: (
+    id: number,
+    name: string,
+    parentCategoryId: number | null,
+    defaultPriority: SpendingPriority,
+  ) =>
     request<Category>(`/categories/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, parent_category_id: parentCategoryId }),
+      body: JSON.stringify({
+        name,
+        parent_category_id: parentCategoryId,
+        default_priority: defaultPriority,
+      }),
     }),
   deleteCategory: (id: number) =>
     request<void>(`/categories/${id}`, { method: "DELETE" }),
@@ -109,17 +133,168 @@ export const api = {
       .items,
   recurringExpenses: async (params: URLSearchParams) =>
     (await request<{ items: RecurringExpense[] }>(`/reports/recurring?${params}`)).items,
+  paymentPeriodReports: async (currency = "") => {
+    const params = new URLSearchParams();
+    if (currency.trim()) params.set("currency", currency.trim().toUpperCase());
+    return (
+      await request<{ items: PaymentPeriod[] }>(
+        `/reports/payment-periods?${params}`,
+      )
+    ).items;
+  },
+  recurringOpportunities: async (params: URLSearchParams) =>
+    (
+      await request<{ items: RecurringOpportunity[] }>(
+        `/reports/recurring-opportunities?${params}`,
+      )
+    ).items,
+  saveRecurringOpportunity: (payload: {
+    identity_key: string;
+    description: string;
+    currency: string;
+    current_monthly_cost: number;
+    replacement_monthly_cost: number | null;
+    one_off_switching_cost: number;
+    difficulty: RecurringOpportunity["difficulty"];
+    decision: RecurringOpportunity["decision"];
+    notes: string | null;
+  }) =>
+    request("/reports/recurring-opportunities", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  deleteRecurringOpportunity: (id: number) =>
+    request<void>(`/reports/recurring-opportunities/${id}`, {
+      method: "DELETE",
+    }),
   exportUrl: (format: "csv" | "xlsx", filters = new URLSearchParams()) => {
     const params = new URLSearchParams(filters);
     params.set("format", format);
     return `${apiBaseUrl}/reports/export?${params}`;
   },
 
-  dashboard: (currency = "GBP", month = "") => {
-    const params = new URLSearchParams({ currency });
-    if (month) params.set("month", `${month}-01`);
-    return request<DashboardSummary>(`/dashboard?${params}`);
-  },
+  paymentCycles: (limit = 100, offset = 0) =>
+    request<{ items: PaymentCycle[]; total: number; limit: number; offset: number }>(
+      `/payment-cycles?limit=${limit}&offset=${offset}`,
+    ),
+  createPaymentCycle: (payload: {
+    name: string | null;
+    start_date: string;
+    next_payment_date: string;
+    expected_income_amount: number;
+    currency: string;
+    opening_balance: number;
+    current_balance: number | null;
+    status: "planned" | "active";
+  }) =>
+    request<PaymentCycle>("/payment-cycles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  updatePaymentCycle: (
+    id: number,
+    payload: Partial<
+      Pick<
+        PaymentCycle,
+        | "name"
+        | "start_date"
+        | "next_payment_date"
+        | "expected_income_amount"
+        | "currency"
+        | "opening_balance"
+        | "current_balance"
+        | "status"
+      >
+    >,
+  ) =>
+    request<PaymentCycle>(`/payment-cycles/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  deletePaymentCycle: (id: number) =>
+    request<void>(`/payment-cycles/${id}`, { method: "DELETE" }),
+  cycleCommitments: (cycleId: number) =>
+    request<{ items: Commitment[]; total: number }>(
+      `/payment-cycles/${cycleId}/commitments`,
+    ),
+  createCommitment: (
+    cycleId: number,
+    payload: {
+      name: string;
+      amount: number;
+      due_date: string;
+      priority: SpendingPriority;
+      category_id: number | null;
+    },
+  ) =>
+    request<Commitment>(`/payment-cycles/${cycleId}/commitments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  updateCommitment: (
+    id: number,
+    payload: Partial<
+      Pick<
+        Commitment,
+        | "name"
+        | "amount"
+        | "currency"
+        | "due_date"
+        | "priority"
+        | "category_id"
+        | "status"
+        | "recurrence"
+      >
+    >,
+  ) =>
+    request<Commitment>(`/commitments/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  deleteCommitment: (id: number) =>
+    request<void>(`/commitments/${id}`, { method: "DELETE" }),
+  cycleAllowances: (cycleId: number) =>
+    request<{ items: CycleAllowance[]; total: number }>(
+      `/payment-cycles/${cycleId}/allowances`,
+    ),
+  createAllowance: (
+    cycleId: number,
+    payload: {
+      name: string;
+      allowance_type: AllowanceType;
+      amount: number;
+      priority: SpendingPriority;
+      category_id: number | null;
+    },
+  ) =>
+    request<CycleAllowance>(`/payment-cycles/${cycleId}/allowances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  updateAllowance: (
+    id: number,
+    payload: Partial<
+      Pick<
+        CycleAllowance,
+        "name" | "allowance_type" | "amount" | "priority" | "category_id"
+      >
+    >,
+  ) =>
+    request<CycleAllowance>(`/allowances/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  deleteAllowance: (id: number) =>
+    request<void>(`/allowances/${id}`, { method: "DELETE" }),
+  safeSpendingForecast: (cycleId: number) =>
+    request<SafeSpendingForecast>(`/payment-cycles/${cycleId}/forecast`),
 
   transactions: (params: URLSearchParams) =>
     request<{ items: Transaction[]; total: number }>(`/transactions?${params}`),

@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import CategorisationRule, Category, Expense, TransactionStatus
+from app.services.commitment_reconciliation import reconcile_pending_commitments
 
 
 class ExpenseNotFoundError(LookupError):
@@ -72,6 +73,10 @@ def resolve_review(
     expense.confidence_score = Decimal("1.0000")
     expense.status = TransactionStatus.CATEGORISED
     session.commit()
+    reconcile_pending_commitments(
+        session,
+        payment_cycle_id=expense.payment_cycle_id,
+    )
 
     return ReviewResolution(
         expense_id=expense.id,

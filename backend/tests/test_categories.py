@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.database.session import get_database_session
 from app.main import app
-from app.models import Category
+from app.models import Category, SpendingPriority
 
 
 @pytest.fixture
@@ -55,13 +55,24 @@ async def test_categories_are_flat_sorted_and_include_parent_ids(session: Sessio
     assert response.status_code == 200
     assert response.json() == {
         "items": [
-            {"id": food.id, "name": "Food", "parent_category_id": None},
+            {
+                "id": food.id,
+                "name": "Food",
+                "parent_category_id": None,
+                "default_priority": "adjustable",
+            },
             {
                 "id": restaurants.id,
                 "name": "restaurants",
                 "parent_category_id": food.id,
+                "default_priority": "adjustable",
             },
-            {"id": travel.id, "name": "Travel", "parent_category_id": None},
+            {
+                "id": travel.id,
+                "name": "Travel",
+                "parent_category_id": None,
+                "default_priority": "adjustable",
+            },
         ]
     }
 
@@ -83,3 +94,33 @@ async def test_categories_can_be_empty(session: Session) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"items": []}
+
+
+@pytest.mark.anyio
+async def test_category_priority_can_be_created_and_updated(session: Session) -> None:
+    async def override_database_session() -> AsyncIterator[Session]:
+        yield session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            created = await client.post(
+                "/api/categories",
+                json={"name": "Rent", "default_priority": "protected"},
+            )
+            category_id = created.json()["id"]
+            updated = await client.patch(
+                f"/api/categories/{category_id}",
+                json={"default_priority": "essential"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert created.status_code == 201
+    assert created.json()["default_priority"] == "protected"
+    assert updated.status_code == 200
+    assert updated.json()["default_priority"] == "essential"
+    assert session.get(Category, category_id).default_priority is SpendingPriority.ESSENTIAL

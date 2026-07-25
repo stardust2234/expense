@@ -15,13 +15,23 @@ from app.schemas.reports import (
     CategoryTotalsResponse,
     MonthlyReportResponse,
     MonthlyTotal,
+    PaymentPeriod,
+    PaymentPeriodReportResponse,
     RecurringExpense,
+    RecurringOpportunity,
+    RecurringOpportunityResponse,
+    RecurringOpportunityWriteRequest,
     RecurringReportResponse,
+    SavedRecurringOpportunity,
 )
 from app.services.report_service import (
+    delete_recurring_opportunity,
     get_category_totals,
     get_monthly_totals,
+    get_payment_periods,
     get_recurring_expenses,
+    get_recurring_opportunities,
+    save_recurring_opportunity,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -108,6 +118,96 @@ async def recurring_expenses(
     return RecurringReportResponse(
         items=[RecurringExpense(**record.__dict__) for record in records]
     )
+
+
+@router.get("/payment-periods", response_model=PaymentPeriodReportResponse)
+async def payment_periods(
+    session: DatabaseSession,
+    currency: CurrencyQuery = None,
+) -> PaymentPeriodReportResponse:
+    records = get_payment_periods(session, currency=currency)
+    return PaymentPeriodReportResponse(
+        items=[PaymentPeriod(**record.__dict__) for record in records]
+    )
+
+
+@router.get(
+    "/recurring-opportunities",
+    response_model=RecurringOpportunityResponse,
+)
+async def recurring_opportunities(
+    session: DatabaseSession,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    currency: CurrencyQuery = None,
+) -> RecurringOpportunityResponse:
+    try:
+        records = get_recurring_opportunities(
+            session,
+            date_from=date_from,
+            date_to=date_to,
+            currency=currency,
+        )
+    except ValueError as error:
+        raise _bad_date_range(error) from error
+    return RecurringOpportunityResponse(
+        items=[RecurringOpportunity(**record.__dict__) for record in records]
+    )
+
+
+@router.put(
+    "/recurring-opportunities",
+    response_model=SavedRecurringOpportunity,
+)
+async def put_recurring_opportunity(
+    request: RecurringOpportunityWriteRequest,
+    session: DatabaseSession,
+) -> SavedRecurringOpportunity:
+    try:
+        saved = save_recurring_opportunity(session, **request.model_dump())
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    monthly_saving = (
+        max(saved.current_monthly_cost - saved.replacement_monthly_cost, 0)
+        if saved.replacement_monthly_cost is not None
+        else None
+    )
+    return SavedRecurringOpportunity(
+        opportunity_id=saved.id,
+        identity_key=saved.identity_key,
+        description=saved.description,
+        currency=saved.currency,
+        current_monthly_cost=saved.current_monthly_cost,
+        replacement_monthly_cost=saved.replacement_monthly_cost,
+        one_off_switching_cost=saved.one_off_switching_cost,
+        monthly_saving=monthly_saving,
+        first_year_saving=(
+            monthly_saving * 12 - saved.one_off_switching_cost
+            if monthly_saving is not None
+            else None
+        ),
+        difficulty=saved.difficulty,
+        decision=saved.decision,
+        notes=saved.notes,
+    )
+
+
+@router.delete(
+    "/recurring-opportunities/{opportunity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_recurring_opportunity(
+    opportunity_id: int,
+    session: DatabaseSession,
+) -> Response:
+    try:
+        delete_recurring_opportunity(session, opportunity_id)
+    except LookupError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/export")

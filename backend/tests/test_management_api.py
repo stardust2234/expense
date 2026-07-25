@@ -121,7 +121,7 @@ async def test_transaction_rule_and_category_management(session: Session) -> Non
 
 
 @pytest.mark.anyio
-async def test_dashboard_recurring_and_exports(session: Session) -> None:
+async def test_category_report_recurring_and_exports(session: Session) -> None:
     current = date(2025, 5, 15)
     category = Category(name="Subscriptions")
     session.add_all(
@@ -193,7 +193,9 @@ async def test_dashboard_recurring_and_exports(session: Session) -> None:
             transport=ASGITransport(app=app),
             base_url="http://testserver",
         ) as client:
-            dashboard = await client.get("/api/dashboard?currency=GBP&month=2025-05-01")
+            category_totals = await client.get(
+                "/api/reports/category-totals?currency=GBP&date_from=2025-05-01&date_to=2025-05-31"
+            )
             recurring = await client.get(
                 "/api/reports/recurring?currency=GBP&date_from=2025-03-01&date_to=2025-05-31"
             )
@@ -208,8 +210,7 @@ async def test_dashboard_recurring_and_exports(session: Session) -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert dashboard.json()["spending"] == 1025
-    assert dashboard.json()["month"] == "2025-05"
+    assert category_totals.json()["items"][0]["total_amount"] == 1025
     assert recurring.json()["items"][0] == {
         "description": "STREAM CO",
         "currency": "GBP",

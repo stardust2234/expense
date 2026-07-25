@@ -1,6 +1,10 @@
 name: Dependency Audit
 
 on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
@@ -8,29 +12,30 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify runner Python
-        run: |
-          python3 --version
-          python3 - <<'PY'
-          import sys
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
 
-          if sys.version_info < (3, 12):
-              raise SystemExit(
-                  f"Python 3.12+ is required, but the runner provides {sys.version.split()[0]}."
-              )
-          PY
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install project and audit tool
+      - name: Install locked project dependencies
+        run: make ci-install
+
+      - name: Audit Python and npm dependencies
         run: |
-          make ci-install
           . .venv/bin/activate
-          python -m pip install pip-audit
-
-      - name: Audit dependencies
-        run: |
-          make backend-audit
+          make dependency-audit
 

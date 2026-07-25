@@ -10,6 +10,7 @@
 - [ ] Documentation updated
 - [ ] Backward compatibility considered
 - [ ] Security impact reviewed
+- [ ] Dependency changes include updated lockfiles and pass `make dependency-audit`
 - [ ] No secrets or sensitive data included
 
 ## Validation
@@ -19,3 +20,4 @@ List commands you ran and key outcomes.
 ## Notes
 
 Any extra context for reviewers.
+

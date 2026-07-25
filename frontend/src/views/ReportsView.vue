@@ -3,13 +3,27 @@ import { computed, onMounted, ref } from "vue";
 
 import { api } from "../api/client";
 import PlotlyChart from "../components/PlotlyChart.vue";
-import type { CategoryTotal, MonthlyTotal, RecurringExpense } from "../types/api";
+import type {
+  CategoryTotal,
+  MonthlyTotal,
+  PaymentPeriod,
+  RecurringExpense,
+  RecurringOpportunity,
+} from "../types/api";
 import { formatUkDate, formatUkMonth } from "../utils/date";
-import { formatMoney, toMajorUnits } from "../utils/money";
+import { formatMoney, toMajorUnits, toMinorUnits } from "../utils/money";
 
 const categoryTotals = ref<CategoryTotal[]>([]);
 const monthlyTotals = ref<MonthlyTotal[]>([]);
 const recurring = ref<RecurringExpense[]>([]);
+const paymentPeriods = ref<PaymentPeriod[]>([]);
+const opportunities = ref<RecurringOpportunity[]>([]);
+const opportunityDrafts = ref<Record<string, {
+  replacement: string;
+  switchingCost: string;
+  difficulty: RecurringOpportunity["difficulty"];
+  decision: RecurringOpportunity["decision"];
+}>>({});
 const dateFrom = ref("");
 const dateTo = ref("");
 const currency = ref("");
@@ -47,6 +61,28 @@ const monthlyChartData = computed(() => {
   }));
 });
 
+const paymentPeriodChartData = computed(() => {
+  const definitions = [
+    ["Protected", "protected_spending", "#8f5146"],
+    ["Essential", "essential_spending", "#4f806b"],
+    ["Adjustable", "adjustable_spending", "#5f83ad"],
+    ["Optional", "optional_spending", "#b58a45"],
+    ["Irregular essential", "irregular_essential_spending", "#8873a9"],
+  ] as const;
+  return definitions.map(([name, field, color]) => ({
+    type: "bar",
+    name,
+    x: paymentPeriods.value.map((period) =>
+      `${formatUkDate(period.start_date)}–${formatUkDate(period.next_payment_date)}`,
+    ),
+    y: paymentPeriods.value.map((period) =>
+      toMajorUnits(period[field], period.currency),
+    ),
+    marker: { color },
+    hovertemplate: `%{x}<br>%{y:.2f}<extra>${name}</extra>`,
+  }));
+});
+
 const chartLayout = {
   autosize: true,
   height: 330,
@@ -66,15 +102,74 @@ async function loadReports() {
   const params = reportParams.value;
 
   try {
-    [categoryTotals.value, monthlyTotals.value, recurring.value] = await Promise.all([
+    [categoryTotals.value, monthlyTotals.value, recurring.value, paymentPeriods.value, opportunities.value] = await Promise.all([
       api.categoryTotals(params),
       api.monthlyTotals(params),
       api.recurringExpenses(params),
+      api.paymentPeriodReports(currency.value),
+      api.recurringOpportunities(params),
     ]);
+    opportunityDrafts.value = Object.fromEntries(
+      opportunities.value.map((item) => [
+        opportunityKey(item),
+        {
+          replacement: item.replacement_monthly_cost === null
+            ? ""
+            : String(toMajorUnits(item.replacement_monthly_cost, item.currency)),
+          switchingCost: String(
+            toMajorUnits(item.one_off_switching_cost, item.currency),
+          ),
+          difficulty: item.difficulty,
+          decision: item.decision,
+        },
+      ]),
+    );
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : "Could not load reports";
   } finally {
     loading.value = false;
+  }
+}
+
+function opportunityKey(item: RecurringOpportunity) {
+  return `${item.identity_key}-${item.currency}`;
+}
+
+async function saveOpportunity(item: RecurringOpportunity) {
+  const draft = opportunityDrafts.value[opportunityKey(item)];
+  if (!draft) return;
+  error.value = "";
+  try {
+    await api.saveRecurringOpportunity({
+      identity_key: item.identity_key,
+      description: item.description,
+      currency: item.currency,
+      current_monthly_cost: item.current_monthly_cost,
+      replacement_monthly_cost: draft.replacement
+        ? toMinorUnits(Number(draft.replacement), item.currency)
+        : null,
+      one_off_switching_cost: draft.switchingCost
+        ? toMinorUnits(Number(draft.switchingCost), item.currency)
+        : 0,
+      difficulty: draft.difficulty,
+      decision: draft.decision,
+      notes: item.notes,
+    });
+    await loadReports();
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : "Could not save opportunity";
+  }
+}
+
+async function resetOpportunity(item: RecurringOpportunity) {
+  if (item.opportunity_id === null) return;
+  if (!window.confirm(`Reset the saved assessment for ${item.description}?`)) return;
+  error.value = "";
+  try {
+    await api.deleteRecurringOpportunity(item.opportunity_id);
+    await loadReports();
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : "Could not reset opportunity";
   }
 }
 
@@ -147,6 +242,61 @@ onMounted(loadReports);
         </div>
       </article>
     </div>
+
+    <article v-if="!loading" class="panel report-panel">
+      <div class="panel-title"><h3>Spending by payment period</h3><span>{{ paymentPeriods.length }} benefit cycles</span></div>
+      <PlotlyChart
+        v-if="paymentPeriods.length"
+        :data="paymentPeriodChartData"
+        :layout="{ ...chartLayout, barmode: 'stack', height: 360, xaxis: { ...chartLayout.xaxis, tickangle: -20 } }"
+      />
+      <div v-else class="table-empty">Create payment cycles to compare benefit periods.</div>
+      <div v-if="paymentPeriods.length" class="table-wrap">
+        <table>
+          <thead><tr><th>Payment period</th><th>Income</th><th>Spending</th><th>Optional</th><th>Net</th></tr></thead>
+          <tbody>
+            <tr v-for="period in paymentPeriods" :key="period.payment_cycle_id">
+              <td><strong>{{ period.name || "Payment cycle" }}</strong><br><span class="muted">{{ formatUkDate(period.start_date) }}–{{ formatUkDate(period.next_payment_date) }}</span></td>
+              <td class="numeric">{{ formatMoney(period.income, period.currency) }}</td>
+              <td class="numeric">{{ formatMoney(period.spending, period.currency) }}</td>
+              <td class="numeric">{{ formatMoney(period.optional_spending, period.currency) }}</td>
+              <td class="numeric">{{ formatMoney(period.net, period.currency) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article v-if="!loading" class="panel report-panel">
+      <div class="panel-title"><div><h3>Recurring-cost opportunities</h3><span>Alternatives are entered by you, not guessed by the app.</span></div><span>{{ opportunities.length }} candidates</span></div>
+      <div v-if="!opportunities.length" class="table-empty">No stable recurring costs detected yet.</div>
+      <div v-else class="opportunity-list">
+        <form
+          v-for="item in opportunities"
+          :key="opportunityKey(item)"
+          class="opportunity-row"
+          @submit.prevent="saveOpportunity(item)"
+        >
+          <div class="opportunity-name">
+            <strong>{{ item.description }}</strong>
+            <span>{{ item.cadence }} · {{ item.occurrence_count }} payments · current monthly cost {{ formatMoney(item.current_monthly_cost, item.currency) }}</span>
+          </div>
+          <label class="field"><span>Alternative monthly cost</span><input v-model="opportunityDrafts[opportunityKey(item)].replacement" type="number" min="0" step="0.01" placeholder="Not researched" /></label>
+          <label class="field"><span>One-off switching cost</span><input v-model="opportunityDrafts[opportunityKey(item)].switchingCost" type="number" min="0" step="0.01" /></label>
+          <label class="field"><span>Difficulty</span><select v-model="opportunityDrafts[opportunityKey(item)].difficulty"><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+          <label class="field"><span>Decision</span><select v-model="opportunityDrafts[opportunityKey(item)].decision"><option value="review">Review</option><option value="planned">Planned</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></label>
+          <div class="opportunity-saving">
+            <span>Potential saving</span>
+            <strong>{{ item.monthly_saving === null ? "Not assessed" : `${formatMoney(item.monthly_saving, item.currency)}/month` }}</strong>
+            <small v-if="item.first_year_saving !== null">{{ formatMoney(item.first_year_saving, item.currency) }} in year one</small>
+          </div>
+          <div class="row-actions">
+            <button class="secondary-button">Save assessment</button>
+            <button v-if="item.opportunity_id !== null" class="text-button danger" type="button" @click="resetOpportunity(item)">Reset</button>
+          </div>
+        </form>
+      </div>
+    </article>
 
     <article v-if="!loading" class="panel report-panel">
       <div class="panel-title"><h3>Recurring expenses</h3><span>{{ recurring.length }} patterns</span></div>

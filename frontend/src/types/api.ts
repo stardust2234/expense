@@ -5,15 +5,6 @@ export type HealthResponse = {
   database: string;
 };
 
-export type CsvImportResult = {
-  batch_id: number;
-  imported: number;
-  normalised: number;
-  normalisation_failed: number;
-  categorised: number;
-  needs_review: number;
-};
-
 export type ImportBatch = {
   id: number;
   source_filename: string;
@@ -36,6 +27,7 @@ export type Category = {
   id: number;
   name: string;
   parent_category_id: number | null;
+  default_priority: SpendingPriority;
 };
 
 export type ReviewQueueItem = {
@@ -89,15 +81,90 @@ export type Merchant = {
   aliases: MerchantAlias[];
 };
 
-export type DashboardSummary = {
-  month: string;
-  spending: number;
-  income: number;
-  net: number;
+export type SpendingPriority =
+  | "protected"
+  | "essential"
+  | "adjustable"
+  | "optional"
+  | "irregular_essential"
+  | "transfer";
+
+export type PaymentCycle = {
+  id: number;
+  name: string | null;
+  start_date: string;
+  next_payment_date: string;
+  expected_income_amount: number;
   currency: string;
-  review_count: number;
-  transaction_count: number;
-  category_totals: CategoryTotal[];
+  opening_balance: number;
+  current_balance: number | null;
+  status: "planned" | "active" | "closed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type Commitment = {
+  id: number;
+  payment_cycle_id: number;
+  funding_payment_date: string;
+  name: string;
+  amount: number;
+  currency: string;
+  due_date: string;
+  priority: SpendingPriority;
+  category_id: number | null;
+  status: "pending" | "paid" | "skipped";
+  recurrence: string | null;
+  matched_expense_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AllowanceType =
+  | "food"
+  | "transport"
+  | "irregular_cost"
+  | "emergency"
+  | "custom";
+
+export type CycleAllowance = {
+  id: number;
+  payment_cycle_id: number;
+  name: string;
+  allowance_type: AllowanceType;
+  amount: number;
+  priority: SpendingPriority;
+  category_id: number | null;
+};
+
+export type AllowanceForecast = {
+  id: number;
+  name: string;
+  allowance_type: AllowanceType;
+  priority: SpendingPriority;
+  amount: number;
+  spent_amount: number;
+  remaining_amount: number;
+};
+
+export type SafeSpendingForecast = {
+  payment_cycle_id: number;
+  as_of_date: string;
+  next_payment_date: string;
+  currency: string;
+  balance_source: "current" | "opening";
+  usable_balance: number;
+  pending_commitments: number;
+  allowance_reserves: number;
+  safe_to_spend: number;
+  shortfall: number;
+  projected_balance: number;
+  days_remaining: number;
+  safe_daily_amount: number;
+  safe_weekly_amount: number;
+  essential_cost_coverage: number | null;
+  allowances: AllowanceForecast[];
+  risks: string[];
 };
 
 export type Transaction = {
@@ -133,5 +200,41 @@ export type RecurringExpense = {
   cadence: string;
   typical_interval_days: number;
   last_seen: string;
+};
+
+export type PaymentPeriod = {
+  payment_cycle_id: number;
+  name: string | null;
+  start_date: string;
+  next_payment_date: string;
+  currency: string;
+  status: string;
+  income: number;
+  spending: number;
+  net: number;
+  transaction_count: number;
+  protected_spending: number;
+  essential_spending: number;
+  adjustable_spending: number;
+  optional_spending: number;
+  irregular_essential_spending: number;
+};
+
+export type RecurringOpportunity = {
+  opportunity_id: number | null;
+  identity_key: string;
+  description: string;
+  currency: string;
+  cadence: string;
+  occurrence_count: number;
+  last_seen: string;
+  current_monthly_cost: number;
+  replacement_monthly_cost: number | null;
+  one_off_switching_cost: number;
+  monthly_saving: number | null;
+  first_year_saving: number | null;
+  difficulty: "easy" | "moderate" | "hard";
+  decision: "review" | "planned" | "accepted" | "rejected";
+  notes: string | null;
 };
 

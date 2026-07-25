@@ -3,15 +3,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class CsvImportResponse(BaseModel):
-    batch_id: int
-    imported: int
-    normalised: int
-    normalisation_failed: int
-    categorised: int
-    needs_review: int
-
-
 class ImportBatchItem(BaseModel):
     id: int
     source_filename: str

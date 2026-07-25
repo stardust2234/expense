@@ -65,7 +65,7 @@ review selectors and client-side hierarchy rendering.
 The default category taxonomy is seeded idempotently. Existing categories are never renamed,
 reparented, or deleted. Containers apply the seed after migrations and before starting the API.
 
-`POST /api/imports/csv` stores the raw batch and returns `202 Accepted` with a queued job.
+`POST /api/imports/file` stores a supported statement and returns `202 Accepted` with a queued job.
 A single in-process worker uses an independent database session to run normalisation, merchant
 matching, and rule evaluation. Persisted job states and timestamps let clients poll batch details;
 unexpected failures retain a bounded error message. Queued or interrupted work is re-enqueued when
@@ -78,10 +78,11 @@ return to the dashboard. Vite proxies `/api` to the local FastAPI server during 
 Caddy owns the same route in the containerised environment. Frontend unit and routing tests run
 with Vitest as part of the standard project checks.
 
-The operations console now includes Dashboard, Import, Review queue, Transactions, Rules,
+The operations console includes Dashboard, Import, Plan, Review queue, Transactions, Rules,
 Merchants, Categories, and Reports. Management APIs support transaction search and bulk category
-assignment, rule editing, merchant merging, and safe category hierarchy changes. Reports include
-monthly and category totals, recurring-pattern detection, and CSV/XLSX exports.
+assignment, rule editing, merchant merging, safe category hierarchy changes, payment-cycle
+planning, and recurring-opportunity assessment. Reports include payment-period, monthly, category,
+and recurring-pattern analysis with CSV/XLSX exports.
 
 Statement import accepts CSV and XLSX directly. Text-based PDFs are supported when extraction
 produces a comma- or tab-delimited table; scanned or unstructured PDFs must be converted before
@@ -90,4 +91,52 @@ upload to avoid unreliable financial parsing.
 The application is currently unauthenticated and intended for trusted local use. The staged
 server-session and multi-user authorisation design is documented in
 `docs/authentication-strategy.md`.
+
+Safe-spending planning is stored separately from imported bank data. Categories provide a default
+spending priority and individual expenses may override it. Payment cycles hold the expected income
+window and balance snapshot; commitments represent unpaid bills; cycle allowances represent food,
+transport, irregular-cost, emergency, or custom reserves. Deleting a payment cycle cascades to its
+commitments and allowances but only detaches its imported expenses.
+
+The default taxonomy seeds an explicit priority for every supplied category. Protected housing and
+core bills, essential daily costs, adjustable costs, optional spending, irregular essentials, and
+non-spending transfers are distinct. Category APIs and the Categories page expose these defaults;
+the idempotent seed never overwrites a later user edit. Savings and investment movements are treated
+as transfers in cash-flow reports rather than consumption.
+
+Payment-cycle CRUD is exposed at `/api/payment-cycles`; commitments are listed and created beneath
+their cycle and updated or deleted at `/api/commitments/{id}`. Cycles in the same currency cannot
+overlap. A commitment must use its cycle's currency and have a due date inside that cycle, and cycle
+dates cannot be changed in a way that excludes an existing commitment.
+
+Allowances and reserves are listed and created at
+`/api/payment-cycles/{id}/allowances` and managed at `/api/allowances/{id}`. A category can feed at
+most one allowance in a cycle, preventing the same spending from reducing multiple reserves.
+Category-linked allowances deduct net outflows already spent in that cycle; category-less reserves
+retain their full value. Creating or changing a payment cycle automatically associates unassigned
+same-currency expenses in its half-open date window, so imported spending can consume the relevant
+category allowance without manual transaction linking.
+
+`GET /api/payment-cycles/{id}/forecast` is an as-of-date projection backed by a pure calculation
+service. It subtracts pending commitments and remaining allowances from the current balance (or the
+opening balance when no current snapshot exists), never presents a negative discretionary amount,
+and reports any shortfall separately. It also returns safe daily and weekly amounts, remaining
+days, essential-cost coverage, allowance consumption, and immediate risks. All monetary values
+remain integer minor units.
+
+Payment-period reporting groups signed cash flow by configured benefit cycle rather than calendar
+month. It preserves income, transfer, and refund semantics and breaks spending down by effective
+priority, using a transaction override before its category default.
+
+Recurring-cost opportunities build on stable cadence detection. The application annualises each
+pattern to a comparable monthly cost but does not invent an alternative price. Users can persist a
+researched replacement cost, one-off switching cost, difficulty, and decision; monthly and
+first-year savings are then calculated and ranked. Rejected opportunities remain visible as an
+explicit decision rather than repeatedly being suggested.
+
+The homepage is intentionally a decision-only view: usable balance, next expected income, unpaid
+bills, safe weekly spending, essential allowances remaining, projected period-end balance,
+immediate risks, and up to three assessed savings opportunities. Payment-cycle setup, balance
+updates, commitments, and allowances live on `/plan`; transaction detail and longer-term analysis
+remain on their dedicated secondary pages.
 

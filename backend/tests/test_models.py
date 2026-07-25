@@ -10,11 +10,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.database.base import Base
 from app.models import (
+    AllowanceType,
     CategorisationRule,
     Category,
+    Commitment,
+    CycleAllowance,
     Expense,
     ImportBatch,
     Merchant,
+    PaymentCycle,
+    PaymentCycleStatus,
+    SpendingPriority,
     TransactionStatus,
 )
 
@@ -121,3 +127,88 @@ def test_unmatched_expense_can_be_queued_for_review(session: Session) -> None:
     assert expense.category_id is None
     assert expense.matched_rule_id is None
     assert expense.status is TransactionStatus.NEEDS_REVIEW
+
+
+def test_safe_spending_plan_is_persisted(session: Session) -> None:
+    category = Category(
+        name="Housing",
+        default_priority=SpendingPriority.PROTECTED,
+    )
+    cycle = PaymentCycle(
+        name="Universal Credit",
+        start_date=date(2026, 7, 25),
+        next_payment_date=date(2026, 8, 25),
+        expected_income_amount=80000,
+        currency="GBP",
+        opening_balance=31000,
+        current_balance=31000,
+        status=PaymentCycleStatus.ACTIVE,
+    )
+    commitment = Commitment(
+        payment_cycle=cycle,
+        name="Rent",
+        amount=16500,
+        currency="GBP",
+        due_date=date(2026, 8, 1),
+        priority=SpendingPriority.PROTECTED,
+        category=category,
+    )
+    allowance = CycleAllowance(
+        payment_cycle=cycle,
+        name="Food and transport",
+        allowance_type=AllowanceType.FOOD,
+        amount=9000,
+        priority=SpendingPriority.ESSENTIAL,
+    )
+    expense = Expense(
+        transaction_date=date(2026, 7, 26),
+        description="Weekly food shop",
+        normalised_description="WEEKLY FOOD SHOP",
+        amount=-2500,
+        currency="GBP",
+        payment_cycle=cycle,
+        priority_override=SpendingPriority.ESSENTIAL,
+    )
+    session.add_all([commitment, allowance, expense])
+    session.commit()
+
+    assert category.default_priority is SpendingPriority.PROTECTED
+    assert cycle.commitments == [commitment]
+    assert cycle.allowances == [allowance]
+    assert cycle.expenses == [expense]
+    assert expense.priority_override is SpendingPriority.ESSENTIAL
+
+
+def test_deleting_payment_cycle_removes_plan_but_keeps_expense(session: Session) -> None:
+    cycle = PaymentCycle(
+        start_date=date(2026, 7, 25),
+        next_payment_date=date(2026, 8, 25),
+        expected_income_amount=80000,
+        currency="GBP",
+        opening_balance=31000,
+    )
+    expense = Expense(
+        transaction_date=date(2026, 7, 26),
+        description="Weekly food shop",
+        normalised_description="WEEKLY FOOD SHOP",
+        amount=-2500,
+        currency="GBP",
+        payment_cycle=cycle,
+    )
+    cycle.commitments.append(
+        Commitment(
+            name="Rent",
+            amount=16500,
+            currency="GBP",
+            due_date=date(2026, 8, 1),
+        )
+    )
+    session.add(expense)
+    session.commit()
+
+    session.delete(cycle)
+    session.commit()
+    session.refresh(expense)
+
+    assert expense.payment_cycle_id is None
+    assert session.query(Commitment).count() == 0

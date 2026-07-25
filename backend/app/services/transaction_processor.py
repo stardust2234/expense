@@ -8,6 +8,7 @@ from app.models import (
     CategorisationRule,
     Expense,
     Merchant,
+    PaymentCycle,
     RawTransaction,
     TransactionStatus,
 )
@@ -46,6 +47,7 @@ def normalise_pending_transactions(
     if import_batch_id is not None:
         statement = statement.where(RawTransaction.import_batch_id == import_batch_id)
     pending = session.scalars(statement).all()
+    payment_cycles = session.scalars(select(PaymentCycle).order_by(PaymentCycle.start_date)).all()
 
     normalised_count = 0
     failed_count = 0
@@ -67,6 +69,15 @@ def normalise_pending_transactions(
                 normalised_description=values.normalised_description,
                 amount=values.amount,
                 currency=values.currency,
+                payment_cycle=next(
+                    (
+                        cycle
+                        for cycle in payment_cycles
+                        if cycle.currency == values.currency
+                        and cycle.start_date <= values.transaction_date < cycle.next_payment_date
+                    ),
+                    None,
+                ),
                 import_batch=raw_transaction.import_batch,
                 raw_transaction=raw_transaction,
                 status=TransactionStatus.NORMALISED,

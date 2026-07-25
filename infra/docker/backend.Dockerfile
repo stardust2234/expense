@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 WORKDIR /srv/backend
 
@@ -6,7 +6,9 @@ COPY backend/pyproject.toml backend/README.md backend/alembic.ini ./
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir . \
+    && python -m pip check
 
 EXPOSE 8000
 

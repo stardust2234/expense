@@ -79,7 +79,7 @@ async def test_csv_upload_runs_the_complete_pipeline(session: Session) -> None:
             base_url="http://testserver",
         ) as client:
             response = await client.post(
-                "/api/imports/csv",
+                "/api/imports/file",
                 files={
                     "file": (
                         "transactions.csv",
@@ -117,7 +117,7 @@ async def test_csv_upload_rejects_non_utf8(session: Session) -> None:
             base_url="http://testserver",
         ) as client:
             response = await client.post(
-                "/api/imports/csv",
+                "/api/imports/file",
                 files={"file": ("bad.csv", b"\xff\xfe", "text/csv")},
             )
     finally:
@@ -140,7 +140,7 @@ async def test_import_preserves_raw_timestamp_and_stores_normalised_date(
             base_url="http://testserver",
         ) as client:
             response = await client.post(
-                "/api/imports/csv",
+                "/api/imports/file",
                 files={
                     "file": (
                         "revolut.csv",
@@ -181,13 +181,13 @@ async def test_duplicate_history_and_failed_batch_retry(session: Session) -> Non
             base_url="http://testserver",
         ) as client:
             uploaded = await client.post(
-                "/api/imports/csv",
+                "/api/imports/file",
                 files={"file": ("failed.csv", content, "text/csv")},
             )
             failed = await wait_for_import(client, uploaded.json()["id"])
             history = await client.get("/api/imports")
             duplicate = await client.post(
-                "/api/imports/csv",
+                "/api/imports/file",
                 files={"file": ("renamed.csv", content, "text/csv")},
             )
 

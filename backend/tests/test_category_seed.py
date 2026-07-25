@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.database.base import Base
-from app.models import Category
+from app.models import Category, SpendingPriority
 from app.services.category_seed_service import CATEGORY_TAXONOMY, seed_categories
 
 
@@ -43,6 +43,17 @@ def test_seed_creates_the_complete_hierarchy(session: Session) -> None:
     assert housing is not None
     assert rent is not None
     assert rent.parent_category_id == housing.id
+    assert housing.default_priority is SpendingPriority.PROTECTED
+    assert rent.default_priority is SpendingPriority.PROTECTED
+    groceries = session.scalar(select(Category).where(Category.name == "Groceries"))
+    takeaway = session.scalar(select(Category).where(Category.name == "Takeaway"))
+    transfers = session.scalar(select(Category).where(Category.name == "Transfers"))
+    assert groceries is not None
+    assert takeaway is not None
+    assert transfers is not None
+    assert groceries.default_priority is SpendingPriority.ESSENTIAL
+    assert takeaway.default_priority is SpendingPriority.OPTIONAL
+    assert transfers.default_priority is SpendingPriority.TRANSFER
 
 
 def test_seed_is_idempotent_and_preserves_existing_categories(session: Session) -> None:
@@ -59,3 +70,4 @@ def test_seed_is_idempotent_and_preserves_existing_categories(session: Session) 
     assert len(categories) == 58
     assert len([category for category in categories if category.name == "Housing"]) == 1
     assert custom_housing.parent_category_id is None
+    assert custom_housing.default_priority is SpendingPriority.ADJUSTABLE

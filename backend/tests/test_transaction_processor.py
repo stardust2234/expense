@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import date
 
 import pytest
 from sqlalchemy import create_engine, event, select
@@ -12,6 +13,7 @@ from app.models import (
     Expense,
     ImportBatch,
     Merchant,
+    PaymentCycle,
     RawTransaction,
     TransactionStatus,
 )
@@ -90,6 +92,27 @@ def test_normalises_pending_rows_idempotently(session: Session) -> None:
     assert expense.normalised_description == "TESCO STORES 0123"
     assert expense.status is TransactionStatus.NORMALISED
     assert len(session.scalars(select(Expense)).all()) == 1
+
+
+def test_normalised_expense_is_linked_to_matching_payment_cycle(
+    session: Session,
+) -> None:
+    cycle = PaymentCycle(
+        start_date=date(2026, 7, 1),
+        next_payment_date=date(2026, 8, 1),
+        expected_income_amount=80000,
+        currency="GBP",
+        opening_balance=30000,
+    )
+    session.add(cycle)
+    session.commit()
+    add_raw_transaction(session, row_number=2, description="Food shop")
+
+    normalise_pending_transactions(session)
+    expense = session.scalar(select(Expense))
+
+    assert expense is not None
+    assert expense.payment_cycle_id == cycle.id
 
 
 def test_records_normalisation_errors_without_creating_expense(session: Session) -> None:

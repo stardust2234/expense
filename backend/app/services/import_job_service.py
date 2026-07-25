@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
 from app.models import ImportBatch
+from app.services.commitment_reconciliation import reconcile_pending_commitments
 from app.services.import_batch_service import batch_counts, get_import_batch
 from app.services.transaction_processor import (
     categorise_normalised_transactions,
@@ -92,6 +93,7 @@ def process_import_batch(
                 session,
                 import_batch_id=batch.id,
             )
+            reconcile_pending_commitments(session, import_batch_id=batch.id)
             session.expire_all()
             refreshed = get_import_batch(session, batch_id=batch.id)
             _, failed, _, _ = batch_counts(refreshed)

@@ -23,7 +23,7 @@ def cash_flow_kind(category: Category) -> CashFlowKind:
     root_name = root_category_name(category).casefold()
     if root_name == "income":
         return CashFlowKind.INCOME
-    if root_name == "transfers":
+    if root_name in {"transfers", "savings and investments"}:
         return CashFlowKind.TRANSFER
     return CashFlowKind.SPENDING
 

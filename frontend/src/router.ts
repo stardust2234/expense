@@ -18,6 +18,11 @@ export const routes: RouteRecordRaw[] = [
     component: () => import("./views/ImportView.vue"),
   },
   {
+    path: "/plan",
+    name: "plan",
+    component: () => import("./views/PlanView.vue"),
+  },
+  {
     path: "/review",
     name: "review",
     component: () => import("./views/ReviewView.vue"),

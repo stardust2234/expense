@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_database_session
+from app.models import SpendingPriority
 from app.schemas.categories import CategoryItem, CategoryListResponse, CategoryWriteRequest
 from app.services.category_service import (
     CategoryConflictError,
@@ -27,6 +28,7 @@ async def get_categories(session: DatabaseSession) -> CategoryListResponse:
                 id=category.id,
                 name=category.name,
                 parent_category_id=category.parent_category_id,
+                default_priority=category.default_priority,
             )
             for category in categories
         ]
@@ -52,6 +54,7 @@ async def post_category(
             session,
             name=request.name,
             parent_category_id=request.parent_category_id,
+            default_priority=request.default_priority or SpendingPriority.ADJUSTABLE,
         )
     except CategoryConflictError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
@@ -71,6 +74,7 @@ async def patch_category(
             name=request.name,
             parent_category_id=request.parent_category_id,
             parent_supplied="parent_category_id" in request.model_fields_set,
+            default_priority=request.default_priority,
         )
     except CategoryNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error

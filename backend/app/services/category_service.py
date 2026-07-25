@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Category
+from app.models import Category, SpendingPriority
 
 
 def list_categories(session: Session) -> list[Category]:
@@ -25,10 +25,15 @@ def create_category(
     *,
     name: str,
     parent_category_id: int | None,
+    default_priority: SpendingPriority,
 ) -> Category:
     _ensure_name_available(session, name)
     parent = _get_parent(session, parent_category_id)
-    category = Category(name=name, parent=parent)
+    category = Category(
+        name=name,
+        parent=parent,
+        default_priority=default_priority,
+    )
     session.add(category)
     session.commit()
     return category
@@ -41,6 +46,7 @@ def update_category(
     name: str | None,
     parent_category_id: int | None,
     parent_supplied: bool,
+    default_priority: SpendingPriority | None,
 ) -> Category:
     category = session.get(Category, category_id)
     if category is None:
@@ -58,6 +64,8 @@ def update_category(
                 raise CategoryConflictError("Category hierarchy cannot contain a cycle")
             ancestor = ancestor.parent
         category.parent = parent
+    if default_priority is not None:
+        category.default_priority = default_priority
     session.commit()
     return category
 

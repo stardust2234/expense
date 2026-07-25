@@ -10,6 +10,7 @@ describe("application routes", () => {
     ).toEqual([
       "/dashboard",
       "/imports",
+      "/plan",
       "/review",
       "/transactions",
       "/rules",

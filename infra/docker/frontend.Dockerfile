@@ -1,15 +1,18 @@
-FROM node:22-alpine
+FROM node:22-alpine AS build
 
 WORKDIR /srv/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY frontend ./
 
 RUN npm run build
 
-EXPOSE 4173
+FROM caddy:2-alpine
 
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
+COPY infra/caddy/frontend.Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /srv/frontend/dist /srv/frontend
+
+EXPOSE 4173
 

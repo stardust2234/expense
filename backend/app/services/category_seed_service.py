@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Category
+from app.models import Category, SpendingPriority
 
 CATEGORY_TAXONOMY: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Housing", ("Rent", "Council tax", "Repairs")),
@@ -23,6 +23,67 @@ CATEGORY_TAXONOMY: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Other", ("Uncategorized", "Exceptional expenses")),
 )
 
+CATEGORY_PRIORITIES: dict[str, SpendingPriority] = {
+    "Housing": SpendingPriority.PROTECTED,
+    "Rent": SpendingPriority.PROTECTED,
+    "Council tax": SpendingPriority.PROTECTED,
+    "Repairs": SpendingPriority.IRREGULAR_ESSENTIAL,
+    "Utilities": SpendingPriority.ADJUSTABLE,
+    "Electricity": SpendingPriority.PROTECTED,
+    "Water": SpendingPriority.PROTECTED,
+    "Internet": SpendingPriority.ADJUSTABLE,
+    "Mobile": SpendingPriority.ADJUSTABLE,
+    "Groceries": SpendingPriority.ESSENTIAL,
+    "Supermarkets": SpendingPriority.ESSENTIAL,
+    "Food shops": SpendingPriority.ESSENTIAL,
+    "Transport": SpendingPriority.ESSENTIAL,
+    "Public transport": SpendingPriority.ESSENTIAL,
+    "Fuel": SpendingPriority.ESSENTIAL,
+    "Taxi": SpendingPriority.ADJUSTABLE,
+    "Maintenance": SpendingPriority.IRREGULAR_ESSENTIAL,
+    "Eating out": SpendingPriority.OPTIONAL,
+    "Restaurants": SpendingPriority.OPTIONAL,
+    "Takeaway": SpendingPriority.OPTIONAL,
+    "Cafés": SpendingPriority.OPTIONAL,
+    "Shopping": SpendingPriority.ADJUSTABLE,
+    "Clothing": SpendingPriority.IRREGULAR_ESSENTIAL,
+    "Electronics": SpendingPriority.OPTIONAL,
+    "Household items": SpendingPriority.IRREGULAR_ESSENTIAL,
+    "Health": SpendingPriority.ESSENTIAL,
+    "Pharmacy": SpendingPriority.ESSENTIAL,
+    "Dentist": SpendingPriority.IRREGULAR_ESSENTIAL,
+    "Healthcare": SpendingPriority.ESSENTIAL,
+    "Personal care": SpendingPriority.ADJUSTABLE,
+    "Toiletries": SpendingPriority.ESSENTIAL,
+    "Haircare": SpendingPriority.ADJUSTABLE,
+    "Beauty": SpendingPriority.OPTIONAL,
+    "Entertainment": SpendingPriority.OPTIONAL,
+    "Streaming": SpendingPriority.OPTIONAL,
+    "Games": SpendingPriority.OPTIONAL,
+    "Events": SpendingPriority.OPTIONAL,
+    "Financial": SpendingPriority.ADJUSTABLE,
+    "Bank fees": SpendingPriority.ADJUSTABLE,
+    "Loan interest": SpendingPriority.PROTECTED,
+    "Insurance": SpendingPriority.ADJUSTABLE,
+    "Subscriptions": SpendingPriority.OPTIONAL,
+    "Software": SpendingPriority.OPTIONAL,
+    "Memberships": SpendingPriority.OPTIONAL,
+    "Savings and investments": SpendingPriority.TRANSFER,
+    "ISA": SpendingPriority.TRANSFER,
+    "SIPP": SpendingPriority.TRANSFER,
+    "Savings": SpendingPriority.TRANSFER,
+    "Income": SpendingPriority.TRANSFER,
+    "Salary": SpendingPriority.TRANSFER,
+    "Refunds": SpendingPriority.TRANSFER,
+    "Benefits": SpendingPriority.TRANSFER,
+    "Transfers": SpendingPriority.TRANSFER,
+    "Own-account transfers": SpendingPriority.TRANSFER,
+    "Credit-card payments": SpendingPriority.TRANSFER,
+    "Other": SpendingPriority.ADJUSTABLE,
+    "Uncategorized": SpendingPriority.ADJUSTABLE,
+    "Exceptional expenses": SpendingPriority.ADJUSTABLE,
+}
+
 
 @dataclass(frozen=True)
 class CategorySeedResult:
@@ -40,7 +101,10 @@ def seed_categories(session: Session) -> CategorySeedResult:
     for parent_name, child_names in CATEGORY_TAXONOMY:
         parent = categories_by_name.get(parent_name.casefold())
         if parent is None:
-            parent = Category(name=parent_name)
+            parent = Category(
+                name=parent_name,
+                default_priority=CATEGORY_PRIORITIES[parent_name],
+            )
             session.add(parent)
             session.flush()
             categories_by_name[parent_name.casefold()] = parent
@@ -51,7 +115,11 @@ def seed_categories(session: Session) -> CategorySeedResult:
         for child_name in child_names:
             child = categories_by_name.get(child_name.casefold())
             if child is None:
-                child = Category(name=child_name, parent=parent)
+                child = Category(
+                    name=child_name,
+                    parent=parent,
+                    default_priority=CATEGORY_PRIORITIES[child_name],
+                )
                 session.add(child)
                 session.flush()
                 categories_by_name[child_name.casefold()] = child

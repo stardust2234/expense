@@ -4,15 +4,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.routes.categories import router as categories_router
-from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.health import router as health_router
 from app.api.routes.imports import router as imports_router
 from app.api.routes.merchants import router as merchants_router
+from app.api.routes.payment_cycles import router as payment_cycles_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.review_queue import router as review_queue_router
 from app.api.routes.rules import router as rules_router
 from app.api.routes.transactions import router as transactions_router
 from app.config import get_settings
+from app.database.session import SessionLocal
+from app.services.commitment_reconciliation import reconcile_pending_commitments
 from app.services.import_job_service import resume_incomplete_import_jobs
 
 settings = get_settings()
@@ -20,16 +22,18 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    with SessionLocal() as session:
+        reconcile_pending_commitments(session)
     resume_incomplete_import_jobs()
     yield
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(categories_router, prefix="/api")
-app.include_router(dashboard_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(imports_router, prefix="/api")
 app.include_router(merchants_router, prefix="/api")
+app.include_router(payment_cycles_router, prefix="/api")
 app.include_router(review_queue_router, prefix="/api")
 app.include_router(rules_router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")

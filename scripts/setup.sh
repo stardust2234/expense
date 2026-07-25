@@ -24,6 +24,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e "./backend[dev]"
+python -m pip check
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "npm is required to install the frontend dependencies." >&2
@@ -35,6 +36,8 @@ if [[ "$ci_mode" == "true" && -f frontend/package-lock.json ]]; then
 else
   (cd frontend && npm install)
 fi
+
+(cd frontend && npm ls --all >/dev/null)
 
 if [[ "$install_hooks" == "true" ]]; then
   git config core.hooksPath .gitea/hooks
@@ -49,3 +52,4 @@ if [[ "$install_hooks" == "true" ]]; then
 else
   echo "Local hook installation skipped"
 fi
+

@@ -40,7 +40,7 @@ from app.services.import_job_service import (
     queue_import_batch,
 )
 
-MAX_CSV_BYTES = 10 * 1024 * 1024
+MAX_STATEMENT_BYTES = 10 * 1024 * 1024
 router = APIRouter(prefix="/imports", tags=["imports"])
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
 
@@ -129,20 +129,6 @@ async def retry_import(
     return item
 
 
-@router.post("/csv", response_model=ImportBatchItem, status_code=status.HTTP_202_ACCEPTED)
-async def upload_csv(
-    session: DatabaseSession,
-    file: Annotated[UploadFile, File()],
-    default_currency: Annotated[str | None, Form(min_length=3, max_length=3)] = None,
-) -> ImportBatchItem:
-    return await _process_upload(
-        session,
-        file,
-        default_currency,
-        allowed_suffixes={".csv"},
-    )
-
-
 @router.post("/file", response_model=ImportBatchItem, status_code=status.HTTP_202_ACCEPTED)
 async def upload_statement(
     session: DatabaseSession,
@@ -153,7 +139,6 @@ async def upload_statement(
         session,
         file,
         default_currency,
-        allowed_suffixes={".csv", ".xlsx", ".pdf"},
     )
 
 
@@ -161,21 +146,20 @@ async def _process_upload(
     session: Session,
     file: UploadFile,
     default_currency: str | None,
-    *,
-    allowed_suffixes: set[str],
 ) -> ImportBatchItem:
     filename = file.filename or "transactions.csv"
     suffix = Path(filename).suffix.lower()
+    allowed_suffixes = {".csv", ".xlsx", ".pdf"}
     if suffix not in allowed_suffixes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Supported file types: {', '.join(sorted(allowed_suffixes))}",
         )
-    content = await file.read(MAX_CSV_BYTES + 1)
-    if len(content) > MAX_CSV_BYTES:
+    content = await file.read(MAX_STATEMENT_BYTES + 1)
+    if len(content) > MAX_STATEMENT_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="CSV file must not exceed 10 MiB",
+            detail="Statement file must not exceed 10 MiB",
         )
     content_digest = sha256(content).hexdigest()
     duplicate = find_duplicate_batch(session, content_sha256=content_digest)

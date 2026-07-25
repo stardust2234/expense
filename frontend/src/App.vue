@@ -9,6 +9,7 @@ const healthLabel = ref("Connecting");
 const views = [
   { path: "/dashboard", label: "Dashboard", symbol: "⌂" },
   { path: "/imports", label: "Import", symbol: "↑" },
+  { path: "/plan", label: "Plan", symbol: "£" },
   { path: "/review", label: "Review", symbol: "✓" },
   { path: "/transactions", label: "Transactions", symbol: "≡" },
   { path: "/rules", label: "Rules", symbol: "⚙" },

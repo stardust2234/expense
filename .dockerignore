@@ -1,13 +1,54 @@
+# Version control and local tooling
 .git
+.gitignore
+.gitea
+.agents
+.codex
+.idea
+.vscode
+
+# Secrets and local environment
+.env
+.env.*
+
+# Python environments, caches, and test output
 .venv
+venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/htmlcov
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/.tox
+**/.nox
+**/.pyright
+backend/tests
+
+# Node dependencies, caches, tests, and build output
 node_modules
-frontend/node_modules
+**/node_modules
 frontend/dist
-backend/.pytest_cache
-backend/.ruff_cache
-backend/*.egg-info
-__pycache__
-*.pyc
+frontend/coverage
+frontend/src/**/*.test.ts
+**/.vite
+**/*.tsbuildinfo
+**/npm-debug.log*
+
+# Persistent and temporary runtime data
 data/*
 !data/.gitkeep
+uploads
+tmp
+**/*.log
+
+# Local-only metadata
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
 

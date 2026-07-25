@@ -26,9 +26,12 @@ from app.database.base import Base
 if TYPE_CHECKING:
     from app.models.categorisation_rule import CategorisationRule
     from app.models.category import Category
+    from app.models.financial_plan import Commitment, PaymentCycle
     from app.models.import_batch import ImportBatch
     from app.models.merchant import Merchant
     from app.models.raw_transaction import RawTransaction
+
+from app.models.financial_plan import SpendingPriority
 
 
 class TransactionStatus(str, Enum):
@@ -62,6 +65,11 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     import_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    payment_cycle_id: Mapped[int | None] = mapped_column(
+        ForeignKey("payment_cycles.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -103,6 +111,17 @@ class Expense(Base):
         index=True,
     )
     categorisation_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    priority_override: Mapped[SpendingPriority | None] = mapped_column(
+        SqlEnum(
+            SpendingPriority,
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            name="expense_spending_priority",
+            values_callable=lambda priorities: [priority.value for priority in priorities],
+        ),
+        nullable=True,
+    )
     confidence_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -122,4 +141,12 @@ class Expense(Base):
     category: Mapped[Category | None] = relationship(back_populates="expenses")
     matched_rule: Mapped[CategorisationRule | None] = relationship(
         back_populates="matched_expenses"
+    )
+    payment_cycle: Mapped[PaymentCycle | None] = relationship(
+        foreign_keys=[payment_cycle_id],
+        back_populates="expenses",
+    )
+    matched_commitment: Mapped[Commitment | None] = relationship(
+        foreign_keys="Commitment.matched_expense_id",
+        back_populates="matched_expense",
     )

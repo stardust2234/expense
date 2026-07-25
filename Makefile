@@ -25,8 +25,10 @@ check: ## Run the standard local validation suite
 	@$(MAKE) backend-format-check
 	@$(MAKE) backend-lint
 	@$(MAKE) backend-test
+	@$(MAKE) database-check
 	@$(MAKE) frontend-typecheck
 	@$(MAKE) frontend-test
+	@$(MAKE) frontend-build
 
 up: ## Start the full stack in Docker Compose
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up --build
@@ -58,6 +60,9 @@ database-downgrade: ## Revert the most recent database migration
 database-seed: ## Add the default category taxonomy
 	@cd backend && $(PYTHON) -m app.seed
 
+database-check: ## Apply migrations to a clean SQLite database and detect model drift
+	@MIGRATION_PYTHON="$(PYTHON)" bash scripts/check-migrations.sh
+
 frontend-run: ## Start the Vite frontend locally
 	@cd frontend && npm run dev
 
@@ -74,7 +79,7 @@ backend-test: ## Run backend tests
 	@cd backend && $(PYTHON) -m pytest
 
 backend-audit: ## Audit installed Python dependencies in the local virtual environment
-	@. .venv/bin/activate && pip-audit
+	@$(PYTHON) -m pip_audit --progress-spinner=off
 
 frontend-typecheck: ## Run frontend TypeScript checks
 	@cd frontend && npm run typecheck
@@ -84,6 +89,13 @@ frontend-test: ## Run frontend unit and routing tests
 
 frontend-build: ## Build the frontend bundle
 	@cd frontend && npm run build
+
+frontend-audit: ## Fail on high or critical npm vulnerabilities
+	@cd frontend && npm audit --audit-level=high
+
+dependency-audit: ## Audit Python and JavaScript dependencies
+	@$(MAKE) backend-audit
+	@$(MAKE) frontend-audit
 
 .PHONY: git-help branch-sync promote-main
 

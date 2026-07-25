@@ -1,0 +1,7 @@
+:4173 {
+	root * /srv/frontend
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+}
+
