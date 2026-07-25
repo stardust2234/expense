@@ -24,9 +24,9 @@ ci-install: ## Install dependencies for CI without local hook setup
 check: ## Run the standard local validation suite
 	@$(MAKE) backend-format-check
 	@$(MAKE) backend-lint
-	@$(MAKE) backend-env-check
 	@$(MAKE) backend-test
 	@$(MAKE) frontend-typecheck
+	@$(MAKE) frontend-test
 
 up: ## Start the full stack in Docker Compose
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up --build
@@ -49,14 +49,20 @@ smoke-test: ## Verify the full stack through Caddy and the API health endpoint
 backend-run: ## Start the FastAPI app locally
 	@cd backend && $(PYTHON) -m uvicorn app.main:app --reload
 
+database-upgrade: ## Apply all pending database migrations
+	@cd backend && $(PYTHON) -m alembic upgrade head
+
+database-downgrade: ## Revert the most recent database migration
+	@cd backend && $(PYTHON) -m alembic downgrade -1
+
+database-seed: ## Add the default category taxonomy
+	@cd backend && $(PYTHON) -m app.seed
+
 frontend-run: ## Start the Vite frontend locally
 	@cd frontend && npm run dev
 
 backend-lint: ## Run backend lint checks
 	@cd backend && $(PYTHON) -m ruff check .
-
-backend-env-check: ## Validate example environment and backend settings
-	@cd backend && $(PYTHON) -m pytest tests/test_config.py
 
 backend-format-check: ## Verify backend formatting without changing files
 	@cd backend && $(PYTHON) -m ruff format --check .
@@ -72,6 +78,9 @@ backend-audit: ## Audit installed Python dependencies in the local virtual envir
 
 frontend-typecheck: ## Run frontend TypeScript checks
 	@cd frontend && npm run typecheck
+
+frontend-test: ## Run frontend unit and routing tests
+	@cd frontend && npm run test
 
 frontend-build: ## Build the frontend bundle
 	@cd frontend && npm run build
@@ -99,3 +108,4 @@ promote-main: ## Merge development into main and push main to the configured rem
 
 bootstrap-protection: ## Apply branch protection to the stable main branch after first release
 	@RENOVATE_ENDPOINT="$(RENOVATE_ENDPOINT)" bash "$(GITEA_DIR)/scripts/apply-branch-protection.sh" --skip-missing "$(ORG)" "$(REPO)" "$(MAIN_BRANCH)"
+

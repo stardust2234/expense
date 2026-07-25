@@ -2,7 +2,6 @@ from fastapi import APIRouter
 
 from app.services.health_service import build_health_payload
 
-
 router = APIRouter(tags=["health"])
 
 

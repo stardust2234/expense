@@ -1,41 +1,60 @@
-# Project Starter
+# Expense Categoriser
 
-This repository is a reusable full-stack starter meant to be cloned directly in Gitea when you create a new private project.
+A small full-stack application for recording expenses and assigning categories with reusable
+matching rules.
 
-It includes:
+## Stack
 
-- `frontend/`: Vue 3 + Vite + TypeScript + Tailwind CSS
-- `backend/`: FastAPI + PostgreSQL integration
-- `infra/`: Docker, Docker Compose, and Caddy
-- `.gitea/`: workflows, hooks, pull-request template, and Gitea-specific automation helpers
+- Vue 3, Vite, TypeScript, and Tailwind CSS
+- FastAPI and SQLAlchemy
+- SQLite
+- Docker Compose and Caddy
 
-## Quick Start
+## Local setup
 
-1. Copy `.env.example` to `.env`
-2. Run `make setup`
-3. Start the stack with `make up`
-4. Open `http://localhost`
-5. Run checks with `make check`
+```bash
+cp .env.example .env
+make setup
+make check
+```
 
-## Default Stack
+Run the development servers in separate terminals:
 
-- Frontend: Vue 3, Vite, TypeScript, Tailwind CSS
-- Backend/API: FastAPI
-- Database: PostgreSQL
-- Deployment baseline: Docker, Docker Compose, Caddy reverse proxy
+```bash
+make database-upgrade
+make database-seed
+make backend-run
+make frontend-run
+```
 
-## Governance
+Run the containerised stack at `http://localhost`:
 
-- `make bootstrap-protection ORG=your-org REPO=your-repo`
+```bash
+make up
+```
 
-Set `RENOVATE_ENDPOINT` to your Gitea API base URL when using the branch-protection helper.
+SQLite data is stored under `data/` and excluded from Git.
+
+## Product areas
+
+- Dashboard for monthly spending, income, net position, and category totals
+- CSV, XLSX, and text-based PDF statement import
+- Low-confidence review queue with correction-to-rule workflow
+- Searchable transactions with bulk category editing
+- Rule, merchant alias, merchant merge, and category hierarchy management
+- Monthly, category, and recurring-expense reports with CSV/XLSX export
 
 ## Structure
 
-- `frontend/` frontend application
-- `backend/` backend API and tests
-- `infra/` deployment assets
-- `.gitea/` workflows, hooks, pull-request template, and Gitea-specific automation helpers
-- `scripts/` root automation helpers for setup
-- `docs/` project notes
-- `data/` local persistent files
+- `backend/app/models/` – persistence models
+- `backend/app/database/` – SQLite engine and session lifecycle
+- `backend/app/api/` – FastAPI routes
+- `backend/tests/` – backend tests
+- `frontend/src/` – Vue application
+- `infra/` – Docker Compose, images, and Caddy configuration
+- `docs/` – architecture notes and the staged authentication strategy
+
+The current build has no login boundary and is intended for trusted local use. See
+[`docs/authentication-strategy.md`](docs/authentication-strategy.md) before exposing it remotely or
+adding multiple users.
+

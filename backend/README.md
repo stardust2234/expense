@@ -1,4 +1,10 @@
-# Backend
+# Expense Categoriser Backend
 
-FastAPI application code lives here.
+FastAPI and SQLAlchemy backend for the expense categorisation application.
+
+Run it from the repository root with:
+
+```bash
+make backend-run
+```
 
