@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.database.session import get_database_session
 from app.main import app
-from app.models import Merchant, MerchantAlias
+from app.models import Merchant, MerchantAlias, RecurringCostOpportunity
 from app.services.matching import MerchantCandidate, identify_merchant
 
 
@@ -102,6 +102,14 @@ async def test_merchants_can_be_merged(session: Session) -> None:
     source = Merchant(name="Amazon EU", aliases=[MerchantAlias(pattern="AMZN MKTP")])
     session.add_all([target, source])
     session.commit()
+    opportunity = RecurringCostOpportunity(
+        identity_key=f"merchant:{source.id}",
+        description=source.name,
+        currency="GBP",
+        current_monthly_cost=1200,
+    )
+    session.add(opportunity)
+    session.commit()
 
     async def override_database_session() -> AsyncIterator[Session]:
         yield session
@@ -125,6 +133,9 @@ async def test_merchants_can_be_merged(session: Session) -> None:
         "AMZN MKTP",
     }
     assert session.get(Merchant, source.id) is None
+    session.refresh(opportunity)
+    assert opportunity.identity_key == f"merchant:{target.id}"
+    assert opportunity.description == target.name
 
 
 def test_merchant_alias_participates_in_identification() -> None:

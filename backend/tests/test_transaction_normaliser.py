@@ -77,6 +77,32 @@ def test_accepts_revolut_short_us_timestamp() -> None:
     assert result.amount == 364
 
 
+def test_ambiguous_short_date_uses_uk_day_month_order() -> None:
+    result = normalise_transaction(
+        {
+            "Date": "04/05/26",
+            "Description": "UK transaction",
+            "Amount": "1.00",
+            "Currency": "GBP",
+        }
+    )
+
+    assert result.transaction_date == date(2026, 5, 4)
+
+
+def test_revolut_ambiguous_slash_date_uses_source_month_day_order() -> None:
+    result = normalise_transaction(
+        {
+            "Completed Date": "04/05/26 06:00",
+            "Description": "Revolut transaction",
+            "Amount": "1.00",
+            "Currency": "GBP",
+        }
+    )
+
+    assert result.transaction_date == date(2026, 4, 5)
+
+
 def test_uses_currency_minor_unit_precision() -> None:
     result = normalise_transaction(
         {

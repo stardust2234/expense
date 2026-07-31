@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.database.session import get_database_session
 from app.main import app
-from app.models import Category, Commitment, Expense
+from app.models import Category, Commitment, Expense, PaymentCycle, SpendingPriority
 from app.models.expense import TransactionStatus
 
 
@@ -97,14 +97,14 @@ async def test_creating_cycle_links_existing_transactions_in_its_date_window(
     session: Session,
 ) -> None:
     included = Expense(
-        transaction_date=date(2026, 7, 26),
+        transaction_date=date(2026, 8, 26),
         description="Included",
         normalised_description="INCLUDED",
         amount=-1000,
         currency="GBP",
     )
     excluded = Expense(
-        transaction_date=date(2026, 8, 25),
+        transaction_date=date(2026, 9, 1),
         description="Next cycle",
         normalised_description="NEXT CYCLE",
         amount=-1000,
@@ -149,7 +149,7 @@ async def test_payment_cycles_cannot_overlap_in_the_same_currency(
         json={
             **first,
             "start_date": "2026-08-20",
-            "next_payment_date": "2026-09-20",
+            "next_payment_date": "2026-08-20",
         },
     )
     adjacent_response = await client.post(
@@ -299,6 +299,17 @@ async def test_commitment_due_date_selects_its_funding_cycle(
     assert response.json()["payment_cycle_id"] == first_response.json()["id"]
     assert response.json()["funding_payment_date"] == "2026-05-29"
 
+    after_payment_response = await client.post(
+        f"/api/payment-cycles/{first_response.json()['id']}/commitments",
+        json={
+            "name": "Month-end bill",
+            "amount": 1000,
+            "due_date": "2026-06-30",
+        },
+    )
+    assert after_payment_response.status_code == 201
+    assert after_payment_response.json()["funding_payment_date"] == "2026-06-29"
+
 
 @pytest.mark.anyio
 async def test_monthly_commitment_is_generated_in_next_adjacent_cycle(
@@ -384,7 +395,7 @@ async def test_patch_rejects_null_required_fields_and_orphaned_commitment_dates(
         f"/api/payment-cycles/{cycle_id}",
         json={"opening_balance": None},
     )
-    shortened_response = await client.patch(
+    payment_date_response = await client.patch(
         f"/api/payment-cycles/{cycle_id}",
         json={"next_payment_date": "2026-08-15"},
     )
@@ -394,8 +405,8 @@ async def test_patch_rejects_null_required_fields_and_orphaned_commitment_dates(
     )
 
     assert null_response.status_code == 422
-    assert shortened_response.status_code == 409
-    assert "every commitment" in shortened_response.json()["detail"]
+    assert payment_date_response.status_code == 200
+    assert payment_date_response.json()["end_date"] == "2026-09-01"
     assert commitment_null_response.status_code == 422
 
 
@@ -502,6 +513,162 @@ async def test_allowance_crud_and_safe_spending_forecast(
 
     delete_response = await client.delete(f"/api/allowances/{food_allowance['id']}")
     assert delete_response.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_forecast_rolls_to_next_income_and_derives_opening_balance(
+    client: AsyncClient,
+    session: Session,
+) -> None:
+    expense = Expense(
+        transaction_date=date(2026, 7, 10),
+        description="Food",
+        normalised_description="FOOD",
+        amount=-10000,
+        currency="GBP",
+        status=TransactionStatus.NEEDS_REVIEW,
+    )
+    session.add(expense)
+    session.commit()
+    july = await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-07-29",
+            "expected_income_amount": 90000,
+            "currency": "GBP",
+            "opening_balance": 100000,
+            "current_balance": None,
+            "status": "active",
+        },
+    )
+    august = await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-08-29",
+            "expected_income_amount": 91000,
+            "currency": "GBP",
+            "opening_balance": 0,
+            "status": "planned",
+        },
+    )
+    commitment = await client.post(
+        f"/api/payment-cycles/{august.json()['id']}/commitments",
+        json={"name": "Rent", "amount": 20000, "due_date": "2026-08-10"},
+    )
+    assert commitment.status_code == 201
+
+    response = await client.get(
+        f"/api/payment-cycles/{july.json()['id']}/forecast?as_of=2026-07-31"
+    )
+
+    assert response.status_code == 200
+    forecast = response.json()
+    assert forecast["next_payment_date"] == "2026-08-29"
+    assert forecast["usable_balance"] == 90000
+    assert forecast["pending_commitments"] == 20000
+
+
+@pytest.mark.anyio
+async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective(
+    client: AsyncClient,
+    session: Session,
+) -> None:
+    income_root = Category(name="Income")
+    benefits = Category(name="Benefits", parent=income_root)
+    housing = Category(name="Housing")
+    rent = Category(
+        name="Rent",
+        parent=housing,
+        default_priority=SpendingPriority.PROTECTED,
+    )
+    groceries = Category(
+        name="Groceries",
+        default_priority=SpendingPriority.ESSENTIAL,
+    )
+    rows = [
+        (date(2026, 5, 29), "Benefit", 90000, benefits),
+        (date(2026, 6, 29), "Benefit", 90100, benefits),
+        (date(2026, 7, 29), "Benefit", 90000, benefits),
+        (date(2026, 5, 27), "Rent", -50000, rent),
+        (date(2026, 6, 27), "Rent", -50000, rent),
+        (date(2026, 7, 27), "Rent", -50000, rent),
+        (date(2026, 5, 8), "Food shop one", -4500, groceries),
+        (date(2026, 6, 12), "Food shop two", -5200, groceries),
+        (date(2026, 7, 18), "Food shop three", -4800, groceries),
+    ]
+    session.add_all(
+        [
+            Expense(
+                transaction_date=transaction_date,
+                description=description,
+                normalised_description=description.upper(),
+                amount=amount,
+                currency="GBP",
+                category=category,
+                status=TransactionStatus.CATEGORISED,
+            )
+            for transaction_date, description, amount, category in rows
+        ]
+    )
+    session.commit()
+
+    preview_response = await client.get(
+        "/api/plan-inference/preview?target_month=2026-08-01&currency=GBP"
+    )
+
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert session.query(PaymentCycle).count() == 0
+    assert preview["income"]["payment_date"] == "2026-08-29"
+    assert len(preview["commitments"]) == 1
+    assert len(preview["allowances"]) == 1
+
+    confirm_response = await client.post(
+        "/api/plan-inference/confirm",
+        json={
+            "target_month": "2026-08-01",
+            "currency": "GBP",
+            "opening_balance": 10000,
+            "current_balance": 9000,
+            "commitment_proposal_ids": [preview["commitments"][0]["proposal_id"]],
+            "allowance_proposal_ids": [preview["allowances"][0]["proposal_id"]],
+        },
+    )
+
+    assert confirm_response.status_code == 201
+    confirmation = confirm_response.json()
+    cycle = session.get(PaymentCycle, confirmation["payment_cycle_id"])
+    assert cycle is not None
+    assert cycle.start_date == date(2026, 8, 1)
+    assert cycle.end_date == date(2026, 9, 1)
+    assert cycle.next_payment_date == date(2026, 8, 29)
+    assert cycle.expected_income_amount == 90000
+    assert len(cycle.commitments) == 1
+    assert cycle.commitments[0].due_date == date(2026, 8, 27)
+    assert len(cycle.allowances) == 1
+    assert cycle.allowances[0].amount == 4800
+    cycle.commitments[0].amount = 49000
+    session.commit()
+
+    repeated = await client.post(
+        "/api/plan-inference/confirm",
+        json={
+            "target_month": "2026-08-01",
+            "currency": "GBP",
+            "opening_balance": 1,
+            "current_balance": 2,
+            "commitment_proposal_ids": [preview["commitments"][0]["proposal_id"]],
+            "allowance_proposal_ids": [],
+        },
+    )
+    session.refresh(cycle)
+    assert repeated.status_code == 201
+    assert repeated.json()["created_cycle"] is False
+    assert cycle.opening_balance == 10000
+    assert cycle.current_balance == 9000
+    assert cycle.expected_income_amount == 90000
+    assert len(cycle.commitments) == 1
+    assert cycle.commitments[0].amount == 49000
 
 
 async def _count_cycles(client: AsyncClient) -> int:

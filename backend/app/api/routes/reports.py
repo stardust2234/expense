@@ -24,15 +24,14 @@ from app.schemas.reports import (
     RecurringReportResponse,
     SavedRecurringOpportunity,
 )
-from app.services.report_service import (
+from app.services.payment_period_report_service import get_payment_periods
+from app.services.recurring_report_service import (
     delete_recurring_opportunity,
-    get_category_totals,
-    get_monthly_totals,
-    get_payment_periods,
     get_recurring_expenses,
     get_recurring_opportunities,
     save_recurring_opportunity,
 )
+from app.services.report_query_service import get_category_totals, get_monthly_totals
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 DatabaseSession = Annotated[Session, Depends(get_database_session)]

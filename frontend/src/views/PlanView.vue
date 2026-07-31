@@ -8,13 +8,17 @@ import type {
   Commitment,
   CycleAllowance,
   PaymentCycle,
+  PlanInferencePreview,
   SafeSpendingForecast,
   SpendingPriority,
 } from "../types/api";
-import { formatUkDate } from "../utils/date";
+import { formatUkDate, inclusiveCycleEnd } from "../utils/date";
 import { formatMoney, toMajorUnits, toMinorUnits } from "../utils/money";
 
 const today = new Date();
+function firstOfMonth(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
 function addCalendarMonth(value: Date) {
   const targetMonth = value.getMonth() + 1;
   const lastTargetDay = new Date(value.getFullYear(), targetMonth + 1, 0).getDate();
@@ -24,9 +28,11 @@ function addCalendarMonth(value: Date) {
     Math.min(value.getDate(), lastTargetDay),
   );
 }
-const nextPayment = addCalendarMonth(today);
-const firstBillDue = new Date(nextPayment);
-firstBillDue.setDate(nextPayment.getDate() - 1);
+const calendarStart = firstOfMonth(today);
+const calendarEnd = addCalendarMonth(calendarStart);
+const benefitDate = new Date(today.getFullYear(), today.getMonth(), 29);
+const firstBillDue = new Date(calendarEnd);
+firstBillDue.setDate(calendarEnd.getDate() - 1);
 const inputDate = (value: Date) =>
   `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 
@@ -40,6 +46,10 @@ const balanceInput = ref("");
 const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
+const inferencePreview = ref<PlanInferencePreview | null>(null);
+const inferenceTargetMonth = ref(inputDate(calendarStart));
+const selectedInferenceCommitments = ref<string[]>([]);
+const selectedInferenceAllowances = ref<string[]>([]);
 const creatingCycle = ref(false);
 const editingCycle = ref(false);
 const editingCommitmentId = ref<number | null>(null);
@@ -47,8 +57,7 @@ const editingAllowanceId = ref<number | null>(null);
 
 const cycleForm = ref({
   name: "Benefit payment",
-  startDate: inputDate(today),
-  nextPaymentDate: inputDate(nextPayment),
+  nextPaymentDate: inputDate(benefitDate),
   expectedIncome: "",
   openingBalance: "",
   currentBalance: "",
@@ -70,7 +79,6 @@ const allowanceForm = ref({
 });
 const cycleEditForm = ref({
   name: "",
-  startDate: "",
   nextPaymentDate: "",
   expectedIncome: "",
   openingBalance: "",
@@ -108,6 +116,60 @@ function message(caught: unknown, fallback: string) {
   error.value = caught instanceof Error ? caught.message : fallback;
 }
 
+async function previewPlan() {
+  saving.value = true;
+  error.value = "";
+  try {
+    const preview = await api.previewPlan(
+      inferenceTargetMonth.value,
+      cycleForm.value.currency,
+    );
+    inferencePreview.value = preview;
+    selectedInferenceCommitments.value = preview.commitments.map(
+      (item) => item.proposal_id,
+    );
+    selectedInferenceAllowances.value = preview.allowances.map(
+      (item) => item.proposal_id,
+    );
+    cycleForm.value.nextPaymentDate = preview.income.payment_date;
+    cycleForm.value.expectedIncome = String(
+      toMajorUnits(preview.income.expected_amount, preview.currency),
+    );
+    cycleForm.value.currency = preview.currency;
+  } catch (caught) {
+    message(caught, "Could not infer a plan from imported transactions");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function confirmPlan() {
+  if (!inferencePreview.value) return;
+  saving.value = true;
+  error.value = "";
+  try {
+    const currency = inferencePreview.value.currency;
+    const result = await api.confirmPlan({
+      target_month: inferencePreview.value.target_month,
+      currency,
+      opening_balance: toMinorUnits(Number(cycleForm.value.openingBalance), currency),
+      current_balance: cycleForm.value.currentBalance
+        ? toMinorUnits(Number(cycleForm.value.currentBalance), currency)
+        : null,
+      commitment_proposal_ids: selectedInferenceCommitments.value,
+      allowance_proposal_ids: selectedInferenceAllowances.value,
+    });
+    inferencePreview.value = null;
+    await load();
+    selectedCycleId.value = result.payment_cycle_id;
+    await loadPlan();
+  } catch (caught) {
+    message(caught, "Could not confirm the inferred plan");
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function loadPlan() {
   if (!selectedCycleId.value) {
     forecast.value = null;
@@ -140,7 +202,6 @@ function startCycleEdit() {
   const cycle = selectedCycle.value;
   cycleEditForm.value = {
     name: cycle.name ?? "",
-    startDate: cycle.start_date,
     nextPaymentDate: cycle.next_payment_date,
     expectedIncome: String(toMajorUnits(cycle.expected_income_amount, cycle.currency)),
     openingBalance: String(toMajorUnits(cycle.opening_balance, cycle.currency)),
@@ -156,12 +217,12 @@ function startCycleEdit() {
 
 function startCycleCreate() {
   if (selectedCycle.value) {
-    const start = new Date(`${selectedCycle.value.next_payment_date}T00:00:00`);
-    const end = addCalendarMonth(start);
+    const payment = addCalendarMonth(
+      new Date(`${selectedCycle.value.next_payment_date}T00:00:00`),
+    );
     cycleForm.value = {
       name: selectedCycle.value.name ?? "Benefit payment",
-      startDate: inputDate(start),
-      nextPaymentDate: inputDate(end),
+      nextPaymentDate: inputDate(payment),
       expectedIncome: String(
         toMajorUnits(
           selectedCycle.value.expected_income_amount,
@@ -184,7 +245,6 @@ async function saveCycle() {
     const currency = cycleEditForm.value.currency.toUpperCase();
     const updated = await api.updatePaymentCycle(selectedCycle.value.id, {
       name: cycleEditForm.value.name || null,
-      start_date: cycleEditForm.value.startDate,
       next_payment_date: cycleEditForm.value.nextPaymentDate,
       expected_income_amount: toMinorUnits(
         Number(cycleEditForm.value.expectedIncome),
@@ -235,7 +295,6 @@ async function createCycle() {
     const cycleCurrency = cycleForm.value.currency.toUpperCase();
     const cycle = await api.createPaymentCycle({
       name: cycleForm.value.name || null,
-      start_date: cycleForm.value.startDate,
       next_payment_date: cycleForm.value.nextPaymentDate,
       expected_income_amount: toMinorUnits(
         Number(cycleForm.value.expectedIncome),
@@ -254,7 +313,7 @@ async function createCycle() {
     cycles.value.unshift(cycle);
     selectedCycleId.value = cycle.id;
     creatingCycle.value = false;
-    const cycleEnd = new Date(`${cycle.next_payment_date}T00:00:00`);
+    const cycleEnd = new Date(`${cycle.end_date}T00:00:00`);
     cycleEnd.setDate(cycleEnd.getDate() - 1);
     commitmentForm.value.dueDate = inputDate(cycleEnd);
     await loadPlan();
@@ -487,15 +546,39 @@ onMounted(load);
     <p v-if="error" class="message error-message">{{ error }}</p>
     <p v-if="loading" class="panel empty-state">Loading your financial position…</p>
 
-    <article v-else-if="!selectedCycle || creatingCycle" class="panel setup-panel">
+    <article v-if="!loading" class="panel setup-panel">
+      <div class="panel-title">
+        <div><h3>Build from imported transactions</h3><span>Preview evidence first; nothing is saved until you confirm.</span></div>
+      </div>
+      <form class="cycle-setup-form" @submit.prevent="previewPlan">
+        <label class="field"><span>Plan month</span><input v-model="inferenceTargetMonth" type="date" required /></label>
+        <label class="field"><span>Opening balance</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
+        <label class="field"><span>Current balance</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" /></label>
+        <label class="field compact-field"><span>Currency</span><input v-model="cycleForm.currency" minlength="3" maxlength="3" required /></label>
+        <button class="secondary-button" :disabled="saving">Preview inferred plan</button>
+      </form>
+      <div v-if="inferencePreview" class="plan-list inference-preview">
+        <div class="plan-row"><div><strong>Expected income</strong><span>{{ inferencePreview.income.description }} · {{ formatUkDate(inferencePreview.income.payment_date) }} · {{ Math.round(inferencePreview.income.confidence * 100) }}% confidence</span></div><strong>{{ formatMoney(inferencePreview.income.expected_amount, inferencePreview.currency) }}</strong></div>
+        <label v-for="item in inferencePreview.commitments" :key="item.proposal_id" class="plan-row">
+          <span><input v-model="selectedInferenceCommitments" type="checkbox" :value="item.proposal_id" /> <strong>{{ item.name }}</strong><br /><small>{{ item.category_name }} · {{ formatUkDate(item.due_date) }} · {{ Math.round(item.confidence * 100) }}%</small></span>
+          <strong>{{ formatMoney(item.amount, inferencePreview.currency) }}</strong>
+        </label>
+        <label v-for="item in inferencePreview.allowances" :key="item.proposal_id" class="plan-row">
+          <span><input v-model="selectedInferenceAllowances" type="checkbox" :value="item.proposal_id" /> <strong>{{ item.name }} allowance</strong><br /><small>{{ item.months_observed }} months of evidence</small></span>
+          <strong>{{ formatMoney(item.amount, inferencePreview.currency) }}</strong>
+        </label>
+        <div class="form-actions"><button class="primary-button" :disabled="saving" @click="confirmPlan">Confirm selected plan</button><button class="secondary-button" @click="inferencePreview = null">Cancel preview</button></div>
+      </div>
+    </article>
+
+    <article v-if="!loading && (!selectedCycle || creatingCycle)" class="panel setup-panel">
       <div class="panel-title">
         <div><h3>{{ selectedCycle ? "Add payment cycle" : "Set up your first payment cycle" }}</h3><span>Amounts are entered in pounds.</span></div>
         <button v-if="selectedCycle" class="text-button" @click="creatingCycle = false">Cancel</button>
       </div>
       <form class="cycle-setup-form" @submit.prevent="createCycle">
         <label class="field"><span>Name</span><input v-model="cycleForm.name" required /></label>
-        <label class="field"><span>Payment received</span><input v-model="cycleForm.startDate" type="date" required /></label>
-        <label class="field"><span>Next payment</span><input v-model="cycleForm.nextPaymentDate" type="date" required /></label>
+        <label class="field"><span>Benefit payment date</span><input v-model="cycleForm.nextPaymentDate" type="date" required /></label>
         <label class="field"><span>Expected income</span><input v-model="cycleForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
         <label class="field"><span>Opening balance</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
         <label class="field"><span>Current usable balance</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" placeholder="Same as opening" /></label>
@@ -507,13 +590,12 @@ onMounted(load);
     <template v-if="selectedCycle && forecast">
       <article class="panel cycle-details">
         <div class="panel-title">
-          <div><h3>Payment-cycle details</h3><span>{{ formatUkDate(selectedCycle.start_date) }} to {{ formatUkDate(selectedCycle.next_payment_date) }}</span></div>
+          <div><h3>Calendar-cycle details</h3><span>{{ formatUkDate(selectedCycle.start_date) }} to {{ formatUkDate(inclusiveCycleEnd(selectedCycle.end_date)) }} · benefit income {{ formatUkDate(selectedCycle.next_payment_date) }}</span></div>
           <div v-if="!editingCycle" class="row-actions"><button class="text-button" @click="startCycleEdit">Edit cycle</button><button class="text-button danger" @click="removeCycle">Delete cycle</button></div>
         </div>
         <form v-if="editingCycle" class="cycle-setup-form" @submit.prevent="saveCycle">
           <label class="field"><span>Name</span><input v-model="cycleEditForm.name" /></label>
-          <label class="field"><span>Payment received</span><input v-model="cycleEditForm.startDate" type="date" required /></label>
-          <label class="field"><span>Next payment</span><input v-model="cycleEditForm.nextPaymentDate" type="date" required /></label>
+          <label class="field"><span>Benefit payment date</span><input v-model="cycleEditForm.nextPaymentDate" type="date" required /></label>
           <label class="field"><span>Expected income</span><input v-model="cycleEditForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
           <label class="field"><span>Opening balance</span><input v-model="cycleEditForm.openingBalance" type="number" step="0.01" required /></label>
           <label class="field"><span>Current usable balance</span><input v-model="cycleEditForm.currentBalance" type="number" step="0.01" /></label>
@@ -548,7 +630,7 @@ onMounted(load);
                 <div class="form-actions"><button class="primary-button" :disabled="saving">Save</button><button class="secondary-button" type="button" @click="editingCommitmentId = null">Cancel</button></div>
               </form>
               <div v-else class="plan-row">
-                <div><strong>{{ item.name }}</strong><span>{{ formatUkDate(item.due_date) }} · {{ priorityLabel(item.priority) }} · {{ item.status }}</span><span>Funded by payment received {{ formatUkDate(item.funding_payment_date) }}</span></div>
+                <div><strong>{{ item.name }}</strong><span>{{ formatUkDate(item.due_date) }} · {{ priorityLabel(item.priority) }} · {{ item.status }}</span><span>Uses benefit/income available from {{ formatUkDate(item.funding_payment_date) }}</span></div>
                 <strong>{{ formatMoney(item.amount, item.currency) }}</strong>
                 <div class="row-actions"><button class="text-button" @click="startCommitmentEdit(item)">Edit</button><button class="text-button danger" aria-label="Delete bill" @click="removeCommitment(item.id)">Remove</button></div>
               </div>

@@ -15,7 +15,8 @@ import DashboardView from "./DashboardView.vue";
 const currentCycle = {
   id: 1,
   name: "Benefit payment",
-  start_date: "2026-07-25",
+  start_date: "2026-07-01",
+  end_date: "2026-08-01",
   next_payment_date: "2026-08-25",
   expected_income_amount: 92480,
   currency: "GBP",
@@ -28,7 +29,8 @@ const currentCycle = {
 const pastCycle = {
   ...currentCycle,
   id: 3,
-  start_date: "2026-04-25",
+  start_date: "2026-04-01",
+  end_date: "2026-05-01",
   next_payment_date: "2026-05-25",
   expected_income_amount: 90014,
   status: "planned" as const,

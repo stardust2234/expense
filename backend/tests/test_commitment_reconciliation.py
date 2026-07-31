@@ -43,6 +43,7 @@ def _cycle(name: str = "July") -> PaymentCycle:
     return PaymentCycle(
         name=name,
         start_date=date(2026, 6, 25),
+        end_date=date(2026, 8, 1),
         next_payment_date=date(2026, 7, 25),
         expected_income_amount=90014,
         currency="GBP",
@@ -186,6 +187,7 @@ def test_rejects_different_payment_cycle_or_category(session: Session) -> None:
     other_cycle = PaymentCycle(
         name="August",
         start_date=date(2026, 7, 25),
+        end_date=date(2026, 9, 1),
         next_payment_date=date(2026, 8, 25),
         expected_income_amount=90014,
         currency="GBP",
@@ -204,6 +206,27 @@ def test_rejects_different_payment_cycle_or_category(session: Session) -> None:
         category=utilities,
     )
     session.add_all([wrong_cycle, wrong_category, commitment])
+    session.commit()
+
+    result = reconcile_pending_commitments(session)
+
+    assert result.matched == 0
+    assert commitment.status is CommitmentStatus.PENDING
+
+
+def test_category_match_still_requires_recognisable_payee(session: Session) -> None:
+    cycle = _cycle()
+    category = Category(name="Utilities")
+    expense = _expense(cycle, category=category, description="UNRELATED COMPANY")
+    commitment = Commitment(
+        payment_cycle=cycle,
+        name="E.on",
+        amount=4742,
+        currency="GBP",
+        due_date=date(2026, 6, 29),
+        category=category,
+    )
+    session.add_all([expense, commitment])
     session.commit()
 
     result = reconcile_pending_commitments(session)

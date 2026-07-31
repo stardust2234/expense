@@ -12,6 +12,7 @@ class ImportBatchItem(BaseModel):
     total_rows: int
     normalised_rows: int
     failed_rows: int
+    duplicate_rows: int
     categorised_rows: int
     needs_review_rows: int
     status: str

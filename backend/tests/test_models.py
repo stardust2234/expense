@@ -137,6 +137,7 @@ def test_safe_spending_plan_is_persisted(session: Session) -> None:
     cycle = PaymentCycle(
         name="Universal Credit",
         start_date=date(2026, 7, 25),
+        end_date=date(2026, 9, 1),
         next_payment_date=date(2026, 8, 25),
         expected_income_amount=80000,
         currency="GBP",
@@ -182,6 +183,7 @@ def test_safe_spending_plan_is_persisted(session: Session) -> None:
 def test_deleting_payment_cycle_removes_plan_but_keeps_expense(session: Session) -> None:
     cycle = PaymentCycle(
         start_date=date(2026, 7, 25),
+        end_date=date(2026, 9, 1),
         next_payment_date=date(2026, 8, 25),
         expected_income_amount=80000,
         currency="GBP",

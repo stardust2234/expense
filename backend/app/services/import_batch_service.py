@@ -64,15 +64,12 @@ def find_duplicate_batch(session: Session, *, content_sha256: str) -> ImportBatc
     )
 
 
-def batch_counts(batch: ImportBatch) -> tuple[int, int, int, int]:
+def batch_counts(batch: ImportBatch) -> tuple[int, int, int, int, int]:
     failed = sum(row.normalisation_error is not None for row in batch.raw_transactions)
+    duplicates = sum(row.duplicate_of_expense_id is not None for row in batch.raw_transactions)
     normalised = len(batch.expenses)
     categorised = sum(expense.status is TransactionStatus.CATEGORISED for expense in batch.expenses)
     needs_review = sum(
         expense.status is TransactionStatus.NEEDS_REVIEW for expense in batch.expenses
     )
-    return normalised, failed, categorised, needs_review
-
-
-def batch_status(batch: ImportBatch) -> str:
-    return batch.processing_status
+    return normalised, failed, duplicates, categorised, needs_review

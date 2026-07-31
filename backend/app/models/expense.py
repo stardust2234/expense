@@ -136,7 +136,10 @@ class Expense(Base):
     )
 
     import_batch: Mapped[ImportBatch | None] = relationship(back_populates="expenses")
-    raw_transaction: Mapped[RawTransaction | None] = relationship(back_populates="expense")
+    raw_transaction: Mapped[RawTransaction | None] = relationship(
+        foreign_keys=[raw_transaction_id],
+        back_populates="expense",
+    )
     merchant: Mapped[Merchant | None] = relationship(back_populates="expenses")
     category: Mapped[Category | None] = relationship(back_populates="expenses")
     matched_rule: Mapped[CategorisationRule | None] = relationship(

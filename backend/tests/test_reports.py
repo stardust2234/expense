@@ -311,6 +311,7 @@ async def test_payment_period_report_uses_cycle_and_priority_semantics(
     cycle = PaymentCycle(
         name="Universal Credit",
         start_date=date(2026, 6, 25),
+        end_date=date(2026, 8, 1),
         next_payment_date=date(2026, 7, 25),
         expected_income_amount=80_000,
         currency="GBP",
@@ -375,6 +376,7 @@ async def test_payment_period_report_uses_cycle_and_priority_semantics(
             "payment_cycle_id": cycle.id,
             "name": "Universal Credit",
             "start_date": "2026-06-25",
+            "end_date": "2026-08-01",
             "next_payment_date": "2026-07-25",
             "currency": "GBP",
             "status": "planned",

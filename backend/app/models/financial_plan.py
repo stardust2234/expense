@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -57,8 +58,12 @@ class PaymentCycle(Base):
     __tablename__ = "payment_cycles"
     __table_args__ = (
         CheckConstraint(
-            "next_payment_date > start_date",
+            "end_date > start_date",
             name="ck_payment_cycles_date_order",
+        ),
+        CheckConstraint(
+            "next_payment_date >= start_date AND next_payment_date < end_date",
+            name="ck_payment_cycles_payment_within_cycle",
         ),
         CheckConstraint(
             "expected_income_amount >= 0",
@@ -73,6 +78,7 @@ class PaymentCycle(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     next_payment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     expected_income_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="GBP")
@@ -194,8 +200,20 @@ class Commitment(Base):
 
     @property
     def funding_payment_date(self) -> date:
-        """The payment received at the start of the cycle that funds this bill."""
-        return self.payment_cycle.start_date
+        """The most recent monthly benefit payment on or before the bill."""
+        payment_date = self.payment_cycle.next_payment_date
+        if self.due_date >= payment_date:
+            return payment_date
+        previous_month = payment_date.month - 1 or 12
+        previous_year = payment_date.year - (1 if payment_date.month == 1 else 0)
+        return date(
+            previous_year,
+            previous_month,
+            min(
+                payment_date.day,
+                calendar.monthrange(previous_year, previous_month)[1],
+            ),
+        )
 
 
 class CycleAllowance(Base):

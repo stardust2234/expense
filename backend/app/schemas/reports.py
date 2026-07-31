@@ -50,6 +50,7 @@ class PaymentPeriod(BaseModel):
     payment_cycle_id: int
     name: str | None
     start_date: date
+    end_date: date
     next_payment_date: date
     currency: str
     status: str

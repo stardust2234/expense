@@ -214,7 +214,7 @@ async def test_category_report_recurring_and_exports(session: Session) -> None:
     assert recurring.json()["items"][0] == {
         "description": "STREAM CO",
         "currency": "GBP",
-        "average_amount": 1024,
+        "average_amount": 1025,
         "occurrence_count": 3,
         "cadence": "monthly",
         "typical_interval_days": 30,

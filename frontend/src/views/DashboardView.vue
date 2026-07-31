@@ -30,7 +30,7 @@ const pendingCommitments = computed(() =>
   commitments.value.filter((item) => item.status === "pending"),
 );
 const cycleTiming = computed(() => {
-  const paymentDate = selectedCycle.value?.next_payment_date;
+  const paymentDate = forecast.value?.next_payment_date;
   if (!paymentDate) return "future";
   if (paymentDate < todayIso) return "past";
   if (paymentDate === todayIso) return "today";
@@ -38,7 +38,7 @@ const cycleTiming = computed(() => {
 });
 const daysSinceCycleEnded = computed(() => {
   if (!selectedCycle.value || cycleTiming.value !== "past") return 0;
-  const paymentDate = new Date(`${selectedCycle.value.next_payment_date}T00:00:00`);
+  const paymentDate = new Date(`${forecast.value!.next_payment_date}T00:00:00`);
   const currentDate = new Date(`${todayIso}T00:00:00`);
   return Math.round((currentDate.getTime() - paymentDate.getTime()) / 86_400_000);
 });
@@ -92,15 +92,11 @@ async function load() {
     ]);
     cycles.value = cycleResult.items;
     opportunities.value = opportunityResult;
-    const currentCycle = cycles.value.find(
-      (cycle) => cycle.start_date <= todayIso && cycle.next_payment_date > todayIso,
+    const currentCalendarCycle = cycles.value.find(
+      (cycle) => cycle.start_date <= todayIso && cycle.end_date > todayIso,
     );
-    const nextCycle = [...cycles.value]
-      .filter((cycle) => cycle.start_date > todayIso)
-      .sort((left, right) => left.start_date.localeCompare(right.start_date))[0];
     selectedCycleId.value =
-      currentCycle?.id ??
-      nextCycle?.id ??
+      currentCalendarCycle?.id ??
       cycles.value.find((cycle) => cycle.status === "active")?.id ??
       cycles.value[0]?.id ??
       null;
@@ -165,7 +161,7 @@ onMounted(load);
           <span v-if="cycleTiming === 'past'">Cycle ended</span>
           <span v-else-if="cycleTiming === 'today'">Income due today</span>
           <span v-else>Next income</span>
-          <strong>{{ formatUkDate(selectedCycle.next_payment_date) }}</strong>
+          <strong>{{ formatUkDate(forecast.next_payment_date) }}</strong>
           <small v-if="cycleTiming === 'past'">Historical plan · ended {{ daysSinceCycleEnded }} day{{ daysSinceCycleEnded === 1 ? "" : "s" }} ago</small>
           <small v-else-if="cycleTiming === 'today'">{{ formatMoney(selectedCycle.expected_income_amount, selectedCycle.currency) }} expected today</small>
           <small v-else>{{ formatMoney(selectedCycle.expected_income_amount, selectedCycle.currency) }} expected · {{ forecast.days_remaining }} days</small>

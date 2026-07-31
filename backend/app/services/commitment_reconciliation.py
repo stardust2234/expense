@@ -12,6 +12,7 @@ from app.models import Commitment, CommitmentStatus, Expense, Merchant, Transact
 
 MAX_DATE_DISTANCE_DAYS = 14
 MIN_NAME_SCORE = 85
+MIN_CATEGORY_NAME_SCORE = 60
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,13 @@ def _candidate_for(
     score = _name_score(commitment, expense)
     if commitment.category_id is not None:
         if expense.category_id != commitment.category_id:
+            return None
+        required_score = (
+            MIN_NAME_SCORE
+            if commitment.status == CommitmentStatus.PAID
+            else MIN_CATEGORY_NAME_SCORE
+        )
+        if score < required_score:
             return None
     elif score < MIN_NAME_SCORE:
         return None
@@ -148,7 +156,7 @@ def reconcile_pending_commitments(
         assigned_expense_ids.add(selected.id)
         matched += 1
 
-    session.commit()
+    session.flush()
     return ReconciliationResult(
         matched=matched,
         ambiguous=ambiguous,

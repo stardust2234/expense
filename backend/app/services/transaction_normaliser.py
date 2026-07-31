@@ -19,12 +19,8 @@ CURRENCY_FIELDS = ("currency", "currency code")
 DATE_FORMATS = (
     "%Y-%m-%d",
     "%Y-%m-%d %H:%M:%S",
-    "%m/%d/%y",
-    "%m/%d/%y %H:%M",
     "%d/%m/%Y",
     "%d/%m/%Y %H:%M:%S",
-    "%m/%d/%Y",
-    "%m/%d/%Y %H:%M",
     "%d-%m-%Y",
     "%Y/%m/%d",
 )
@@ -87,7 +83,45 @@ def _required_value(
     raise NormalisationError(field, f"missing value; accepted columns: {', '.join(aliases)}")
 
 
-def _parse_date(value: str) -> date:
+def _parse_date(value: str, *, month_first: bool = False) -> date:
+    slash_match = re.fullmatch(
+        r"(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        value,
+    )
+    if slash_match:
+        first, second, year_text, hour, minute, second_value = slash_match.groups()
+        first_number = int(first)
+        second_number = int(second)
+        year = int(year_text)
+        if len(year_text) == 2:
+            year += 2000
+        if hour is not None:
+            try:
+                strptime(
+                    f"{int(hour):02d}:{int(minute):02d}:{int(second_value or 0):02d}",
+                    "%H:%M:%S",
+                )
+            except ValueError as error:
+                raise NormalisationError(
+                    "transaction_date", f"{value!r} is not a supported date"
+                ) from error
+        if month_first:
+            month, day = first_number, second_number
+        else:
+            # UK day/month ordering is the default. Fall back to month/day only
+            # when the second component cannot be a month (for example 4/16/26).
+            day, month = (
+                (second_number, first_number)
+                if second_number > 12 and first_number <= 12
+                else (first_number, second_number)
+            )
+        try:
+            return date(year, month, day)
+        except ValueError as error:
+            raise NormalisationError(
+                "transaction_date", f"{value!r} is not a supported date"
+            ) from error
+
     for date_format in DATE_FORMATS:
         try:
             parsed = strptime(value, date_format)
@@ -153,8 +187,16 @@ def normalise_transaction(
 ) -> NormalisedTransaction:
     """Convert one raw CSV row into canonical values without mutating input or external state."""
     row = _normalise_row(raw_data)
+    date_alias = next(
+        (alias for alias in DATE_FIELDS if row.get(alias) and row[alias].strip()),
+        None,
+    )
+    date_value = _required_value(row, field="transaction_date", aliases=DATE_FIELDS)
     transaction_date = _parse_date(
-        _required_value(row, field="transaction_date", aliases=DATE_FIELDS)
+        date_value,
+        # Revolut's Started/Completed Date export uses US slash ordering even
+        # when the account currency and application locale are UK-based.
+        month_first=date_alias in {"started date", "completed date"} and "/" in date_value,
     )
     description, normalised_description = _normalise_description(
         _required_value(row, field="description", aliases=DESCRIPTION_FIELDS)

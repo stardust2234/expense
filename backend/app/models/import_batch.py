@@ -33,6 +33,12 @@ class ImportBatch(Base):
         index=True,
     )
     processing_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    processing_claim_token: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    processing_lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     processing_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

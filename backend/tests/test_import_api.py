@@ -218,3 +218,44 @@ async def test_duplicate_history_and_failed_batch_retry(session: Session) -> Non
     assert detail["needs_review_rows"] == 1
     assert detail["failed_rows"] == 0
     assert retry_again.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_overlapping_statement_skips_existing_transactions(
+    session: Session,
+) -> None:
+    first_content = (
+        "Date,Description,Amount,Currency\n"
+        "2026-07-24,Coffee,-3.50,GBP\n"
+        "2026-07-25,Groceries,-12.00,GBP\n"
+    )
+    overlapping_content = (
+        "Date,Description,Amount,Currency\n2026-07-24,Coffee,-3.50,GBP\n2026-07-26,Bus,-2.00,GBP\n"
+    )
+
+    async def override_database_session() -> AsyncIterator[Session]:
+        yield session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            first = await client.post(
+                "/api/imports/file",
+                files={"file": ("history.csv", first_content, "text/csv")},
+            )
+            await wait_for_import(client, first.json()["id"])
+            second = await client.post(
+                "/api/imports/file",
+                files={"file": ("july.csv", overlapping_content, "text/csv")},
+            )
+            completed = await wait_for_import(client, second.json()["id"])
+    finally:
+        app.dependency_overrides.clear()
+
+    assert completed["normalised_rows"] == 1
+    assert completed["duplicate_rows"] == 1
+    assert completed["failed_rows"] == 0
+    assert session.query(Expense).count() == 3

@@ -1,7 +1,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Expense, Merchant, MerchantAlias
+from app.models import Expense, Merchant, MerchantAlias, RecurringCostOpportunity
+from app.services.recurring_identity import merchant_identity
 
 
 class MerchantNotFoundError(LookupError):
@@ -96,6 +97,27 @@ def merge_merchants(
 
     for expense in session.scalars(select(Expense).where(Expense.merchant_id == source.id)).all():
         expense.merchant = target
+    source_identity = merchant_identity(source.id)
+    target_identity = merchant_identity(target.id)
+    source_opportunities = session.scalars(
+        select(RecurringCostOpportunity).where(
+            RecurringCostOpportunity.identity_key == source_identity
+        )
+    ).all()
+    target_currencies = set(
+        session.scalars(
+            select(RecurringCostOpportunity.currency).where(
+                RecurringCostOpportunity.identity_key == target_identity
+            )
+        ).all()
+    )
+    for opportunity in source_opportunities:
+        if opportunity.currency in target_currencies:
+            session.delete(opportunity)
+        else:
+            opportunity.identity_key = target_identity
+            opportunity.description = target.name
+            target_currencies.add(opportunity.currency)
     session.delete(source)
     session.commit()
     return target

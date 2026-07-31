@@ -59,7 +59,6 @@ def create_payment_cycle(
     session: Session,
     *,
     name: str | None,
-    start_date: date,
     next_payment_date: date,
     expected_income_amount: int,
     currency: str,
@@ -67,15 +66,17 @@ def create_payment_cycle(
     current_balance: int | None,
     status: PaymentCycleStatus,
 ) -> PaymentCycle:
+    start_date, end_date = _calendar_bounds(next_payment_date)
     _ensure_no_overlap(
         session,
         start_date=start_date,
-        next_payment_date=next_payment_date,
+        end_date=end_date,
         currency=currency,
     )
     cycle = PaymentCycle(
         name=name,
         start_date=start_date,
+        end_date=end_date,
         next_payment_date=next_payment_date,
         expected_income_amount=expected_income_amount,
         currency=currency,
@@ -98,27 +99,23 @@ def update_payment_cycle(
     changes: dict[str, object],
 ) -> PaymentCycle:
     cycle = get_payment_cycle(session, payment_cycle_id)
-    start_date = changes.get("start_date", cycle.start_date)
     next_payment_date = changes.get("next_payment_date", cycle.next_payment_date)
     currency = changes.get("currency", cycle.currency)
-    assert isinstance(start_date, date)
     assert isinstance(next_payment_date, date)
     assert isinstance(currency, str)
-    if next_payment_date <= start_date:
-        raise FinancialPlanConflictError("next_payment_date must be after start_date")
+    start_date, end_date = _calendar_bounds(next_payment_date)
+    changes["start_date"] = start_date
+    changes["end_date"] = end_date
     _ensure_no_overlap(
         session,
         start_date=start_date,
-        next_payment_date=next_payment_date,
+        end_date=end_date,
         currency=currency,
         exclude_cycle_id=cycle.id,
     )
     if currency != cycle.currency and cycle.commitments:
         raise FinancialPlanConflictError("A payment cycle with commitments cannot change currency")
-    if any(
-        not start_date <= commitment.due_date < next_payment_date
-        for commitment in cycle.commitments
-    ):
+    if any(not start_date <= commitment.due_date < end_date for commitment in cycle.commitments):
         raise FinancialPlanConflictError(
             "Payment cycle dates must continue to include every commitment"
         )
@@ -235,19 +232,25 @@ def _ensure_no_overlap(
     session: Session,
     *,
     start_date: date,
-    next_payment_date: date,
+    end_date: date,
     currency: str,
     exclude_cycle_id: int | None = None,
 ) -> None:
     statement = select(PaymentCycle.id).where(
         PaymentCycle.currency == currency,
-        PaymentCycle.start_date < next_payment_date,
-        PaymentCycle.next_payment_date > start_date,
+        PaymentCycle.start_date < end_date,
+        PaymentCycle.end_date > start_date,
     )
     if exclude_cycle_id is not None:
         statement = statement.where(PaymentCycle.id != exclude_cycle_id)
     if session.scalar(statement) is not None:
         raise FinancialPlanConflictError(f"Payment cycle overlaps another {currency} cycle")
+
+
+def _calendar_bounds(payment_date: date) -> tuple[date, date]:
+    start_date = payment_date.replace(day=1)
+    end_date = _add_month(start_date)
+    return start_date, end_date
 
 
 def _validate_commitment(
@@ -258,7 +261,7 @@ def _validate_commitment(
     currency: str,
     category_id: int | None,
 ) -> None:
-    if not cycle.start_date <= due_date < cycle.next_payment_date:
+    if not cycle.start_date <= due_date < cycle.end_date:
         raise FinancialPlanConflictError("Commitment due_date must fall within its payment cycle")
     if currency != cycle.currency:
         raise FinancialPlanConflictError("Commitment currency must match its payment cycle")
@@ -277,7 +280,7 @@ def _cycle_for_due_date(
         .where(
             PaymentCycle.currency == currency,
             PaymentCycle.start_date <= due_date,
-            PaymentCycle.next_payment_date > due_date,
+            PaymentCycle.end_date > due_date,
         )
         .order_by(PaymentCycle.start_date.desc())
     )
@@ -300,7 +303,7 @@ def _generate_recurring_commitments(session: Session, cycle: PaymentCycle) -> No
     previous_cycle = session.scalar(
         select(PaymentCycle).where(
             PaymentCycle.currency == cycle.currency,
-            PaymentCycle.next_payment_date == cycle.start_date,
+            PaymentCycle.end_date == cycle.start_date,
             PaymentCycle.id != cycle.id,
         )
     )
@@ -319,7 +322,7 @@ def _generate_recurring_commitments(session: Session, cycle: PaymentCycle) -> No
         next_due_date = _add_month(source.due_date)
         while next_due_date < cycle.start_date:
             next_due_date = _add_month(next_due_date)
-        if next_due_date >= cycle.next_payment_date:
+        if next_due_date >= cycle.end_date:
             continue
         session.add(
             Commitment(
@@ -344,7 +347,7 @@ def _sync_cycle_expenses(session: Session, cycle: PaymentCycle) -> None:
             (
                 (Expense.currency != cycle.currency)
                 | (Expense.transaction_date < cycle.start_date)
-                | (Expense.transaction_date >= cycle.next_payment_date)
+                | (Expense.transaction_date >= cycle.end_date)
             ),
         )
         .values(payment_cycle_id=None)
@@ -355,7 +358,7 @@ def _sync_cycle_expenses(session: Session, cycle: PaymentCycle) -> None:
             Expense.payment_cycle_id.is_(None),
             Expense.currency == cycle.currency,
             Expense.transaction_date >= cycle.start_date,
-            Expense.transaction_date < cycle.next_payment_date,
+            Expense.transaction_date < cycle.end_date,
         )
         .values(payment_cycle_id=cycle.id)
     )

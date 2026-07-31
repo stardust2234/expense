@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Category, Expense, Merchant, TransactionStatus
+from app.services.commitment_reconciliation import reconcile_pending_commitments
+from app.services.manual_categorisation_service import apply_manual_category
 
 
 class TransactionConflictError(ValueError):
@@ -83,11 +84,9 @@ def bulk_assign_category(
     if len(expenses) != len(set(transaction_ids)):
         raise TransactionConflictError("One or more transactions were not found")
 
-    for expense in expenses:
-        expense.category = category
-        expense.status = TransactionStatus.CATEGORISED
-        expense.categorisation_source = "manual"
-        expense.confidence_score = Decimal("1.0000")
-        expense.matched_rule = None
+    apply_manual_category(list(expenses), category=category)
+    cycle_ids = {expense.payment_cycle_id for expense in expenses if expense.payment_cycle_id}
+    for cycle_id in cycle_ids:
+        reconcile_pending_commitments(session, payment_cycle_id=cycle_id)
     session.commit()
     return len(expenses)

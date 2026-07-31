@@ -29,7 +29,6 @@ from app.services.import_batch_service import (
     ImportBatchConflictError,
     ImportBatchNotFoundError,
     batch_counts,
-    batch_status,
     find_duplicate_batch,
     get_import_batch,
     list_import_batches,
@@ -46,7 +45,7 @@ DatabaseSession = Annotated[Session, Depends(get_database_session)]
 
 
 def _batch_item(batch) -> ImportBatchItem:
-    normalised, failed, categorised, needs_review = batch_counts(batch)
+    normalised, failed, duplicates, categorised, needs_review = batch_counts(batch)
     return ImportBatchItem(
         id=batch.id,
         source_filename=batch.source_filename,
@@ -56,9 +55,10 @@ def _batch_item(batch) -> ImportBatchItem:
         total_rows=batch.total_rows,
         normalised_rows=normalised,
         failed_rows=failed,
+        duplicate_rows=duplicates,
         categorised_rows=categorised,
         needs_review_rows=needs_review,
-        status=batch_status(batch),
+        status=batch.processing_status,
         processing_error=batch.processing_error,
         imported_at=batch.imported_at,
         processing_started_at=batch.processing_started_at,
@@ -100,7 +100,7 @@ async def retry_import(
 ) -> ImportBatchItem:
     try:
         batch = get_import_batch(session, batch_id=batch_id)
-        _, failed, _, _ = batch_counts(batch)
+        _, failed, _, _, _ = batch_counts(batch)
         if batch.processing_status in ACTIVE_IMPORT_STATUSES:
             raise ImportBatchConflictError(
                 f"Import batch {batch_id} is already {batch.processing_status}"

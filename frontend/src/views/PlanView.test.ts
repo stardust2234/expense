@@ -16,6 +16,8 @@ const apiMock = vi.hoisted(() => ({
   createAllowance: vi.fn(),
   updateAllowance: vi.fn(),
   deleteAllowance: vi.fn(),
+  previewPlan: vi.fn(),
+  confirmPlan: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({ api: apiMock }));
@@ -25,8 +27,9 @@ import PlanView from "./PlanView.vue";
 const cycle = {
   id: 7,
   name: "Benefit payment",
-  start_date: "2026-07-24",
-  next_payment_date: "2026-08-21",
+  start_date: "2026-07-01",
+  end_date: "2026-08-01",
+  next_payment_date: "2026-07-29",
   expected_income_amount: 80000,
   currency: "GBP",
   opening_balance: 50000,
@@ -38,7 +41,7 @@ const cycle = {
 const commitment = {
   id: 12,
   payment_cycle_id: 7,
-  funding_payment_date: "2026-07-24",
+  funding_payment_date: "2026-07-29",
   name: "Rent",
   amount: 32000,
   currency: "GBP",
@@ -63,8 +66,9 @@ const allowance = {
 const futureCycle = {
   ...cycle,
   id: 8,
-  start_date: "2026-08-21",
-  next_payment_date: "2026-09-18",
+  start_date: "2026-08-01",
+  end_date: "2026-09-01",
+  next_payment_date: "2026-08-29",
   status: "planned" as const,
 };
 const forecast = {
@@ -129,6 +133,40 @@ beforeEach(async () => {
   apiMock.createPaymentCycle.mockResolvedValue(futureCycle);
   apiMock.updateCommitment.mockResolvedValue(commitment);
   apiMock.updateAllowance.mockResolvedValue(allowance);
+  apiMock.previewPlan.mockResolvedValue({
+    target_month: "2026-08-01",
+    end_date: "2026-09-01",
+    currency: "GBP",
+    income: {
+      proposal_id: "income:benefit",
+      description: "Benefit",
+      expected_amount: 80000,
+      payment_date: "2026-08-29",
+      occurrence_count: 3,
+      confidence: 0.9,
+      evidence_transaction_ids: [1, 2, 3],
+    },
+    commitments: [{
+      proposal_id: "commitment:rent",
+      name: "Rent",
+      amount: 32000,
+      due_date: "2026-08-01",
+      category_id: 1,
+      category_name: "Housing",
+      priority: "protected",
+      recurrence: "monthly",
+      occurrence_count: 3,
+      confidence: 0.9,
+      evidence_transaction_ids: [4, 5, 6],
+    }],
+    allowances: [],
+  });
+  apiMock.confirmPlan.mockResolvedValue({
+    payment_cycle_id: 8,
+    created_cycle: true,
+    created_commitment_ids: [13],
+    created_allowance_ids: [],
+  });
 
   host = document.createElement("div");
   document.body.append(host);
@@ -141,14 +179,38 @@ afterEach(() => {
 });
 
 describe("Plan page editing", () => {
+  it("previews and confirms a transaction-inferred plan", async () => {
+    const inferencePanel = [...host.querySelectorAll("article")].find((item) =>
+      item.textContent?.includes("Build from imported transactions"),
+    ) as HTMLElement;
+    const balance = inferencePanel.querySelector('input[type="number"]') as HTMLInputElement;
+    inputValue(balance, "400");
+    button("Preview inferred plan", inferencePanel).click();
+    await settle();
+
+    expect(apiMock.previewPlan).toHaveBeenCalled();
+    button("Confirm selected plan", inferencePanel).click();
+    await settle();
+
+    expect(apiMock.confirmPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_month: "2026-08-01",
+        opening_balance: 40000,
+        commitment_proposal_ids: ["commitment:rent"],
+      }),
+    );
+  });
+
   it("creates the next non-overlapping cycle as planned", async () => {
     button("Add cycle").click();
     await nextTick();
 
-    const form = host.querySelector(".setup-panel form") as HTMLFormElement;
+    const setupPanel = [...host.querySelectorAll(".setup-panel")].find((item) =>
+      item.textContent?.includes("Add payment cycle"),
+    ) as HTMLElement;
+    const form = setupPanel.querySelector("form") as HTMLFormElement;
     const dates = form.querySelectorAll('input[type="date"]');
-    expect((dates[0] as HTMLInputElement).value).toBe("2026-08-21");
-    expect((dates[1] as HTMLInputElement).value).toBe("2026-09-21");
+    expect((dates[0] as HTMLInputElement).value).toBe("2026-08-29");
     inputValue(
       form.querySelectorAll('input[type="number"]')[1] as HTMLInputElement,
       "400",
@@ -158,8 +220,7 @@ describe("Plan page editing", () => {
 
     expect(apiMock.createPaymentCycle).toHaveBeenCalledWith(
       expect.objectContaining({
-        start_date: "2026-08-21",
-        next_payment_date: "2026-09-21",
+        next_payment_date: "2026-08-29",
         opening_balance: 40000,
         status: "planned",
       }),

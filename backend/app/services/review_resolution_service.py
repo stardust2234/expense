@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import CategorisationRule, Category, Expense, TransactionStatus
 from app.services.commitment_reconciliation import reconcile_pending_commitments
+from app.services.manual_categorisation_service import apply_manual_category
 
 
 class ExpenseNotFoundError(LookupError):
@@ -67,16 +67,12 @@ def resolve_review(
         rule.priority = priority
         rule.enabled = True
 
-    expense.category = category
-    expense.matched_rule = rule
-    expense.categorisation_source = "manual"
-    expense.confidence_score = Decimal("1.0000")
-    expense.status = TransactionStatus.CATEGORISED
-    session.commit()
+    apply_manual_category([expense], category=category, matched_rule=rule)
     reconcile_pending_commitments(
         session,
         payment_cycle_id=expense.payment_cycle_id,
     )
+    session.commit()
 
     return ReviewResolution(
         expense_id=expense.id,

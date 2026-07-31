@@ -32,6 +32,16 @@ class RawTransaction(Base):
     source_row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     raw_data: Mapped[dict[str, str | None]] = mapped_column(JSON, nullable=False)
     normalisation_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duplicate_of_expense_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "expenses.id",
+            name="fk_raw_transactions_duplicate_of_expense_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
+        index=True,
+    )
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -39,4 +49,10 @@ class RawTransaction(Base):
     )
 
     import_batch: Mapped[ImportBatch] = relationship(back_populates="raw_transactions")
-    expense: Mapped[Expense | None] = relationship(back_populates="raw_transaction")
+    expense: Mapped[Expense | None] = relationship(
+        foreign_keys="Expense.raw_transaction_id",
+        back_populates="raw_transaction",
+    )
+    duplicate_of_expense: Mapped[Expense | None] = relationship(
+        foreign_keys=[duplicate_of_expense_id]
+    )

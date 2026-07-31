@@ -7,7 +7,6 @@ from app.models import AllowanceType, CommitmentStatus, PaymentCycleStatus, Spen
 
 class PaymentCycleCreateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=100)
-    start_date: date
     next_payment_date: date
     expected_income_amount: int = Field(ge=0)
     currency: str = Field(default="GBP", min_length=3, max_length=3)
@@ -30,16 +29,9 @@ class PaymentCycleCreateRequest(BaseModel):
             raise ValueError("currency must contain three letters")
         return value.upper()
 
-    @model_validator(mode="after")
-    def validate_date_order(self) -> "PaymentCycleCreateRequest":
-        if self.next_payment_date <= self.start_date:
-            raise ValueError("next_payment_date must be after start_date")
-        return self
-
 
 class PaymentCycleUpdateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=100)
-    start_date: date | None = None
     next_payment_date: date | None = None
     expected_income_amount: int | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
@@ -76,6 +68,7 @@ class PaymentCycleItem(BaseModel):
     id: int
     name: str | None
     start_date: date
+    end_date: date
     next_payment_date: date
     expected_income_amount: int
     currency: str

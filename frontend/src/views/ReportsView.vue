@@ -10,7 +10,7 @@ import type {
   RecurringExpense,
   RecurringOpportunity,
 } from "../types/api";
-import { formatUkDate, formatUkMonth } from "../utils/date";
+import { formatUkDate, formatUkMonth, inclusiveCycleEnd } from "../utils/date";
 import { formatMoney, toMajorUnits, toMinorUnits } from "../utils/money";
 
 const categoryTotals = ref<CategoryTotal[]>([]);
@@ -73,7 +73,7 @@ const paymentPeriodChartData = computed(() => {
     type: "bar",
     name,
     x: paymentPeriods.value.map((period) =>
-      `${formatUkDate(period.start_date)}–${formatUkDate(period.next_payment_date)}`,
+      `${formatUkDate(period.start_date)}–${formatUkDate(inclusiveCycleEnd(period.end_date))}`,
     ),
     y: paymentPeriods.value.map((period) =>
       toMajorUnits(period[field], period.currency),
@@ -256,7 +256,7 @@ onMounted(loadReports);
           <thead><tr><th>Payment period</th><th>Income</th><th>Spending</th><th>Optional</th><th>Net</th></tr></thead>
           <tbody>
             <tr v-for="period in paymentPeriods" :key="period.payment_cycle_id">
-              <td><strong>{{ period.name || "Payment cycle" }}</strong><br><span class="muted">{{ formatUkDate(period.start_date) }}–{{ formatUkDate(period.next_payment_date) }}</span></td>
+              <td><strong>{{ period.name || "Payment cycle" }}</strong><br><span class="muted">{{ formatUkDate(period.start_date) }}–{{ formatUkDate(inclusiveCycleEnd(period.end_date)) }}</span></td>
               <td class="numeric">{{ formatMoney(period.income, period.currency) }}</td>
               <td class="numeric">{{ formatMoney(period.spending, period.currency) }}</td>
               <td class="numeric">{{ formatMoney(period.optional_spending, period.currency) }}</td>

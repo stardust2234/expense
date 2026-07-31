@@ -11,6 +11,7 @@ import type {
   MonthlyTotal,
   PaymentPeriod,
   PaymentCycle,
+  PlanInferencePreview,
   RecurringExpense,
   RecurringOpportunity,
   ReviewQueueResponse,
@@ -180,7 +181,6 @@ export const api = {
     ),
   createPaymentCycle: (payload: {
     name: string | null;
-    start_date: string;
     next_payment_date: string;
     expected_income_amount: number;
     currency: string;
@@ -199,7 +199,6 @@ export const api = {
       Pick<
         PaymentCycle,
         | "name"
-        | "start_date"
         | "next_payment_date"
         | "expected_income_amount"
         | "currency"
@@ -295,6 +294,31 @@ export const api = {
     request<void>(`/allowances/${id}`, { method: "DELETE" }),
   safeSpendingForecast: (cycleId: number) =>
     request<SafeSpendingForecast>(`/payment-cycles/${cycleId}/forecast`),
+  previewPlan: (targetMonth: string, currency: string) => {
+    const params = new URLSearchParams({
+      target_month: targetMonth,
+      currency: currency.toUpperCase(),
+    });
+    return request<PlanInferencePreview>(`/plan-inference/preview?${params}`);
+  },
+  confirmPlan: (payload: {
+    target_month: string;
+    currency: string;
+    opening_balance: number;
+    current_balance: number | null;
+    commitment_proposal_ids: string[];
+    allowance_proposal_ids: string[];
+  }) =>
+    request<{
+      payment_cycle_id: number;
+      created_cycle: boolean;
+      created_commitment_ids: number[];
+      created_allowance_ids: number[];
+    }>("/plan-inference/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
   transactions: (params: URLSearchParams) =>
     request<{ items: Transaction[]; total: number }>(`/transactions?${params}`),

@@ -14,6 +14,7 @@ export type ImportBatch = {
   total_rows: number;
   normalised_rows: number;
   failed_rows: number;
+  duplicate_rows: number;
   categorised_rows: number;
   needs_review_rows: number;
   status: string;
@@ -93,6 +94,7 @@ export type PaymentCycle = {
   id: number;
   name: string | null;
   start_date: string;
+  end_date: string;
   next_payment_date: string;
   expected_income_amount: number;
   currency: string;
@@ -167,6 +169,52 @@ export type SafeSpendingForecast = {
   risks: string[];
 };
 
+export type InferredIncome = {
+  proposal_id: string;
+  description: string;
+  expected_amount: number;
+  payment_date: string;
+  occurrence_count: number;
+  confidence: number;
+  evidence_transaction_ids: number[];
+};
+
+export type InferredCommitment = {
+  proposal_id: string;
+  name: string;
+  amount: number;
+  due_date: string;
+  category_id: number;
+  category_name: string;
+  priority: SpendingPriority;
+  recurrence: string;
+  occurrence_count: number;
+  confidence: number;
+  evidence_transaction_ids: number[];
+};
+
+export type InferredAllowance = {
+  proposal_id: string;
+  name: string;
+  allowance_type: AllowanceType;
+  amount: number;
+  category_id: number;
+  category_name: string;
+  priority: SpendingPriority;
+  months_observed: number;
+  confidence: number;
+  evidence_transaction_ids: number[];
+};
+
+export type PlanInferencePreview = {
+  target_month: string;
+  end_date: string;
+  currency: string;
+  income: InferredIncome;
+  commitments: InferredCommitment[];
+  allowances: InferredAllowance[];
+};
+
 export type Transaction = {
   id: number;
   transaction_date: string;
@@ -206,6 +254,7 @@ export type PaymentPeriod = {
   payment_cycle_id: number;
   name: string | null;
   start_date: string;
+  end_date: string;
   next_payment_date: string;
   currency: string;
   status: string;

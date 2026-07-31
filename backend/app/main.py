@@ -24,6 +24,7 @@ settings = get_settings()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     with SessionLocal() as session:
         reconcile_pending_commitments(session)
+        session.commit()
     resume_incomplete_import_jobs()
     yield
 

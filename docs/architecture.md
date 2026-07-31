@@ -28,14 +28,20 @@ starts.
 CSV imports are atomic: malformed input is rejected without retaining a partial batch. Empty rows
 are ignored, while header names and all non-empty row values are stored unchanged as JSON.
 New uploads store a SHA-256 checksum and reject an exact file duplicate by referring the client to
-the existing batch. Import history derives batch outcomes from raw-row errors and linked expense
-statuses. Failed raw rows can be retried in place after parser improvements without duplicating the
-batch or already-normalised expenses; the original fallback currency is retained for that retry.
+the existing batch. Different files with overlapping date ranges are deduplicated after
+normalisation using date, canonical description, signed amount, and currency. Matching is
+occurrence-aware, so two genuinely identical same-day payments remain two payments when both
+statements contain them. Skipped raw rows retain a link to the earlier Expense and are reported as
+duplicates rather than failures. Import history derives batch outcomes from raw-row errors,
+duplicate links, and linked expense statuses. Failed raw rows can be retried in place after parser
+improvements without duplicating the batch or already-normalised expenses; the original fallback
+currency is retained for that retry.
 
 Transaction normalisation is a pure service: it accepts a raw row and returns typed canonical
 values without database access or input mutation. It standardises supported headers, dates,
-descriptions, currencies, and converts decimal major-unit amounts to integer minor units. Ambiguous
-US-style dates are intentionally rejected.
+descriptions, currencies, and converts decimal major-unit amounts to integer minor units. Slash
+dates default to UK day/month order; known Revolut Started/Completed Date fields use that export's
+month/day order.
 
 The processing coordinator is idempotent. It creates one linked expense for each valid pending raw
 row and records normalisation failures on invalid rows. Merchant identification prefers the
@@ -67,9 +73,10 @@ reparented, or deleted. Containers apply the seed after migrations and before st
 
 `POST /api/imports/file` stores a supported statement and returns `202 Accepted` with a queued job.
 A single in-process worker uses an independent database session to run normalisation, merchant
-matching, and rule evaluation. Persisted job states and timestamps let clients poll batch details;
-unexpected failures retain a bounded error message. Queued or interrupted work is re-enqueued when
-the API starts, and failed or partially normalised batches can be retried idempotently. Merchant
+matching, and rule evaluation. Persisted job states, claim tokens, and expiring leases prevent two
+processes from claiming the same live job. Startup recovery re-enqueues queued work and only
+reclaims processing work after its lease expires. Unexpected failures retain a bounded error
+message, and failed or partially normalised batches can be retried idempotently. Merchant
 management endpoints expose canonical merchants and description aliases; aliases are considered
 alongside canonical names during identification.
 
@@ -118,14 +125,17 @@ same-currency expenses in its half-open date window, so imported spending can co
 category allowance without manual transaction linking.
 
 `GET /api/payment-cycles/{id}/forecast` is an as-of-date projection backed by a pure calculation
-service. It subtracts pending commitments and remaining allowances from the current balance (or the
-opening balance when no current snapshot exists), never presents a negative discretionary amount,
+service. Calendar cycles remain reporting boundaries, while the forecast rolls a passed monthly
+income date forward and includes commitments and allowances due before that genuinely next income.
+It subtracts pending commitments and remaining allowances from the current balance. When no current
+snapshot exists it derives the usable balance from the opening balance and signed transactions to
+date. It never presents a negative discretionary amount,
 and reports any shortfall separately. It also returns safe daily and weekly amounts, remaining
 days, essential-cost coverage, allowance consumption, and immediate risks. All monetary values
 remain integer minor units.
 
-Payment-period reporting groups signed cash flow by configured benefit cycle rather than calendar
-month. It preserves income, transfer, and refund semantics and breaks spending down by effective
+Payment-period reporting groups signed cash flow by calendar payment cycle while retaining the
+separate benefit date recorded for that month. It preserves income, transfer, and refund semantics and breaks spending down by effective
 priority, using a transaction override before its category default.
 
 Recurring-cost opportunities build on stable cadence detection. The application annualises each
@@ -139,4 +149,8 @@ bills, safe weekly spending, essential allowances remaining, projected period-en
 immediate risks, and up to three assessed savings opportunities. Payment-cycle setup, balance
 updates, commitments, and allowances live on `/plan`; transaction detail and longer-term analysis
 remain on their dedicated secondary pages.
+
+The Plan page can preview a plan inferred from the latest six months of categorised evidence.
+Recurring income and commitments must be recent, category allowances net refunds against spending,
+and users select individual proposals before confirmation writes anything.
 

@@ -57,6 +57,20 @@ SQLite data, WAL files, and imported transaction records are stored under the ho
 directory, which is excluded from Git. Uploaded statement contents are stored as database rows;
 the source files are not retained as a separate upload directory.
 
+### Inferred financial plans
+
+`GET /api/plan-inference/preview?target_month=2026-08-01&currency=GBP`
+builds a read-only suggestion from categorised transaction evidence. It returns the inferred
+income payment, recurring commitments, variable essential allowances, confidence scores, and
+the transaction IDs supporting every suggestion.
+
+`POST /api/plan-inference/confirm` recomputes that evidence and creates only the proposal IDs
+selected by the client. Previewing never writes plan data, and confirmation rejects unknown or
+stale proposal IDs. At least two monthly categorised income transactions are required.
+The Plan page exposes this preview-and-confirm workflow directly. Inference uses the latest six
+months of evidence, ignores recurring patterns no longer seen recently, and nets refunds into
+variable allowance estimates.
+
 Before upgrading containers, stop the application and back up the database:
 
 ```bash

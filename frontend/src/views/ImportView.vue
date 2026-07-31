@@ -148,6 +148,9 @@ onBeforeUnmount(() => clearTimeout(pollTimer));
       <p v-else-if="result.failed_rows" class="message error-message result-warning">
         {{ result.failed_rows }} row(s) could not be normalised.
       </p>
+      <p v-if="result.duplicate_rows" class="message result-warning">
+        {{ result.duplicate_rows }} row(s) matched transactions imported earlier and were skipped.
+      </p>
     </div>
 
     <article class="panel report-panel">
@@ -165,7 +168,7 @@ onBeforeUnmount(() => clearTimeout(pollTimer));
             <tr v-for="batch in history" :key="batch.id">
               <td>{{ formatUkDateTime(batch.imported_at) }}</td>
               <td><strong>{{ batch.source_filename }}</strong><br /><span class="muted">{{ batch.source_type.toUpperCase() }} · Batch {{ batch.id }}</span></td>
-              <td>{{ batch.normalised_rows }}/{{ batch.total_rows }} normalised</td>
+              <td>{{ batch.normalised_rows }}/{{ batch.total_rows }} normalised<span v-if="batch.duplicate_rows" class="muted"> · {{ batch.duplicate_rows }} duplicates skipped</span></td>
               <td>
                 <span class="status-pill">{{ batch.status.replace(/_/g, " ") }}</span>
                 <span v-if="batch.failed_rows" class="muted"> · {{ batch.failed_rows }} failed</span>

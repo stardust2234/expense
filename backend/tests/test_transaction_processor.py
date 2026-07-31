@@ -94,11 +94,63 @@ def test_normalises_pending_rows_idempotently(session: Session) -> None:
     assert len(session.scalars(select(Expense)).all()) == 1
 
 
+def test_skips_cross_batch_duplicates_but_preserves_extra_occurrences(
+    session: Session,
+) -> None:
+    first_raw = add_raw_transaction(
+        session,
+        row_number=2,
+        description="Coffee",
+        amount="-3.50",
+    )
+    normalise_pending_transactions(
+        session,
+        import_batch_id=first_raw.import_batch_id,
+    )
+    original_expense = session.scalar(select(Expense))
+    assert original_expense is not None
+
+    second_batch = ImportBatch(
+        source_filename="overlapping.csv",
+        source_type="csv",
+        total_rows=2,
+    )
+    second_batch.raw_transactions.extend(
+        [
+            RawTransaction(
+                source_row_number=row_number,
+                raw_data={
+                    "Date": "2026-07-24",
+                    "Description": "Coffee",
+                    "Amount": "-3.50",
+                    "Currency": "GBP",
+                },
+            )
+            for row_number in (2, 3)
+        ]
+    )
+    session.add(second_batch)
+    session.commit()
+
+    result = normalise_pending_transactions(
+        session,
+        import_batch_id=second_batch.id,
+    )
+
+    assert result.duplicates == 1
+    assert result.normalised == 1
+    assert second_batch.raw_transactions[0].duplicate_of_expense_id == original_expense.id
+    assert second_batch.raw_transactions[0].expense is None
+    assert second_batch.raw_transactions[1].expense is not None
+    assert session.query(Expense).count() == 2
+
+
 def test_normalised_expense_is_linked_to_matching_payment_cycle(
     session: Session,
 ) -> None:
     cycle = PaymentCycle(
         start_date=date(2026, 7, 1),
+        end_date=date(2026, 9, 1),
         next_payment_date=date(2026, 8, 1),
         expected_income_amount=80000,
         currency="GBP",

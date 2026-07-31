@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
@@ -25,6 +25,7 @@ from app.services.transaction_normaliser import NormalisationError, normalise_tr
 class NormalisationResult:
     normalised: int
     failed: int
+    duplicates: int
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,10 @@ def normalise_pending_transactions(
     import_batch_id: int | None = None,
     retry_failed: bool = False,
 ) -> NormalisationResult:
-    statement = select(RawTransaction).where(~RawTransaction.expense.has())
+    statement = select(RawTransaction).where(
+        ~RawTransaction.expense.has(),
+        RawTransaction.duplicate_of_expense_id.is_(None),
+    )
     if not retry_failed:
         statement = statement.where(RawTransaction.normalisation_error.is_(None))
     statement = statement.order_by(RawTransaction.id)
@@ -51,6 +55,26 @@ def normalise_pending_transactions(
 
     normalised_count = 0
     failed_count = 0
+    duplicate_count = 0
+    existing_statement = select(Expense).order_by(Expense.id)
+    if import_batch_id is not None:
+        existing_statement = existing_statement.where(
+            or_(
+                Expense.import_batch_id != import_batch_id,
+                Expense.import_batch_id.is_(None),
+            )
+        )
+    existing_expenses = session.scalars(existing_statement).all()
+    existing_by_fingerprint: dict[tuple[object, ...], list[Expense]] = {}
+    for expense in existing_expenses:
+        fingerprint = (
+            expense.transaction_date,
+            expense.normalised_description,
+            expense.amount,
+            expense.currency,
+        )
+        existing_by_fingerprint.setdefault(fingerprint, []).append(expense)
+    occurrence_by_fingerprint: dict[tuple[object, ...], int] = {}
     for raw_transaction in pending:
         try:
             values = normalise_transaction(
@@ -60,6 +84,21 @@ def normalise_pending_transactions(
         except NormalisationError as error:
             raw_transaction.normalisation_error = str(error)
             failed_count += 1
+            continue
+
+        fingerprint = (
+            values.transaction_date,
+            values.normalised_description,
+            values.amount,
+            values.currency,
+        )
+        occurrence = occurrence_by_fingerprint.get(fingerprint, 0)
+        occurrence_by_fingerprint[fingerprint] = occurrence + 1
+        historical_matches = existing_by_fingerprint.get(fingerprint, [])
+        if occurrence < len(historical_matches):
+            raw_transaction.duplicate_of_expense = historical_matches[occurrence]
+            raw_transaction.normalisation_error = None
+            duplicate_count += 1
             continue
 
         session.add(
@@ -74,7 +113,7 @@ def normalise_pending_transactions(
                         cycle
                         for cycle in payment_cycles
                         if cycle.currency == values.currency
-                        and cycle.start_date <= values.transaction_date < cycle.next_payment_date
+                        and cycle.start_date <= values.transaction_date < cycle.end_date
                     ),
                     None,
                 ),
@@ -87,7 +126,11 @@ def normalise_pending_transactions(
         normalised_count += 1
 
     session.commit()
-    return NormalisationResult(normalised=normalised_count, failed=failed_count)
+    return NormalisationResult(
+        normalised=normalised_count,
+        failed=failed_count,
+        duplicates=duplicate_count,
+    )
 
 
 def categorise_normalised_transactions(
