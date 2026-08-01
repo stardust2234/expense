@@ -6,12 +6,23 @@ import {
   type RouteRecordRaw,
 } from "vue-router";
 
+import { auth } from "./auth";
+
 export const routes: RouteRecordRaw[] = [
+  {
+    path: "/login",
+    name: "login",
+    component: () => import("./views/LoginView.vue"),
+    meta: { public: true, authLayout: true },
+  },
+  { path: "/verify-email", name: "verify-email", component: () => import("./views/VerifyEmailView.vue"), meta: { public: true, authLayout: true } },
+  { path: "/reset-password", name: "reset-password", component: () => import("./views/ResetPasswordView.vue"), meta: { public: true, authLayout: true } },
   {
     path: "/dashboard",
     name: "dashboard",
     component: () => import("./views/DashboardView.vue"),
   },
+  { path: "/account", name: "account", component: () => import("./views/AccountView.vue") },
   {
     path: "/imports",
     name: "imports",
@@ -58,7 +69,20 @@ export const routes: RouteRecordRaw[] = [
 
 export function createAppRouter(
   history: RouterHistory = createWebHistory(),
+  sessionGuard: () => Promise<boolean> = () => auth.ensureSession(),
 ): Router {
-  return createRouter({ history, routes });
+  const router = createRouter({ history, routes });
+  router.beforeEach(async (to) => {
+    const authenticated = await sessionGuard();
+    if (!to.meta.public && !authenticated) {
+      return { name: "login", query: { redirect: to.fullPath } };
+    }
+    if (!to.meta.public && authenticated && auth.user.value?.email_verified === false) {
+      return { name: "verify-email" };
+    }
+    if (to.name === "login" && authenticated) return { name: "dashboard" };
+    return true;
+  });
+  return router;
 }
 

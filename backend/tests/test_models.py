@@ -22,6 +22,9 @@ from app.models import (
     PaymentCycleStatus,
     SpendingPriority,
     TransactionStatus,
+    User,
+    Workspace,
+    WorkspaceMembership,
 )
 
 
@@ -214,3 +217,20 @@ def test_deleting_payment_cycle_removes_plan_but_keeps_expense(session: Session)
 
     assert expense.payment_cycle_id is None
     assert session.query(Commitment).count() == 0
+
+
+def test_authentication_workspace_relationships(session: Session) -> None:
+    user = User(
+        email="owner@example.com",
+        display_name="Owner",
+        password_hash="argon2id-placeholder",
+        is_admin=True,
+    )
+    workspace = Workspace(name="Personal", is_claimed=True)
+    membership = WorkspaceMembership(user=user, workspace=workspace, role="owner")
+    session.add(membership)
+    session.commit()
+
+    assert user.memberships == [membership]
+    assert workspace.memberships == [membership]
+    assert membership.role == "owner"

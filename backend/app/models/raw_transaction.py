@@ -7,13 +7,14 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstr
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 if TYPE_CHECKING:
     from app.models.expense import Expense
     from app.models.import_batch import ImportBatch
 
 
-class RawTransaction(Base):
+class RawTransaction(WorkspaceOwned, Base):
     __tablename__ = "raw_transactions"
     __table_args__ = (
         UniqueConstraint(

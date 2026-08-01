@@ -1,13 +1,30 @@
+import { i18n, type AppLocale } from "../i18n";
+
+function localeTag(): string {
+  return ({ en: "en-GB", fr: "fr-FR" } satisfies Record<AppLocale, string>)[
+    i18n.global.locale.value
+  ];
+}
+
 export function formatUkDate(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return value;
-  return `${match[3]}/${match[2]}/${match[1]}`;
+  return new Intl.DateTimeFormat(localeTag(), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
 }
 
 export function formatUkMonth(value: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(value);
   if (!match) return value;
-  return `${match[2]}/${match[1]}`;
+  return new Intl.DateTimeFormat(localeTag(), {
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)));
 }
 
 export function inclusiveCycleEnd(exclusiveEnd: string): string {
@@ -28,7 +45,7 @@ export function formatUkDateTime(value: string): string {
   const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
   const parsed = new Date(hasTimezone ? value : `${value}Z`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(localeTag(), {
     dateStyle: "short",
     timeStyle: "short",
     timeZone: "Europe/London",

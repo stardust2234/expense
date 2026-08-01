@@ -13,6 +13,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
@@ -26,18 +27,16 @@ from app.database.session import get_database_session
 from app.schemas.imports import ImportBatchItem, ImportBatchListResponse
 from app.services.csv_importer import CsvImportError, import_csv
 from app.services.import_batch_service import (
+    ACTIVE_IMPORT_STATUSES,
     ImportBatchConflictError,
     ImportBatchNotFoundError,
     batch_counts,
+    delete_import_batch,
     find_duplicate_batch,
     get_import_batch,
     list_import_batches,
 )
-from app.services.import_job_service import (
-    ACTIVE_IMPORT_STATUSES,
-    enqueue_import_job,
-    queue_import_batch,
-)
+from app.services.import_job_service import enqueue_import_job, queue_import_batch
 
 MAX_STATEMENT_BYTES = 10 * 1024 * 1024
 router = APIRouter(prefix="/imports", tags=["imports"])
@@ -87,6 +86,17 @@ async def import_detail(batch_id: int, session: DatabaseSession) -> ImportBatchI
         return _batch_item(get_import_batch(session, batch_id=batch_id))
     except ImportBatchNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.delete("/{batch_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_import(batch_id: int, session: DatabaseSession) -> Response:
+    try:
+        delete_import_batch(session, batch_id=batch_id)
+    except ImportBatchNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except ImportBatchConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

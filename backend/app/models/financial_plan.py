@@ -19,6 +19,7 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 if TYPE_CHECKING:
     from app.models.category import Category
@@ -54,7 +55,7 @@ class AllowanceType(str, Enum):
     CUSTOM = "custom"
 
 
-class PaymentCycle(Base):
+class PaymentCycle(WorkspaceOwned, Base):
     __tablename__ = "payment_cycles"
     __table_args__ = (
         CheckConstraint(
@@ -124,7 +125,7 @@ class PaymentCycle(Base):
     )
 
 
-class Commitment(Base):
+class Commitment(WorkspaceOwned, Base):
     __tablename__ = "commitments"
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_commitments_amount_nonnegative"),
@@ -216,7 +217,7 @@ class Commitment(Base):
         )
 
 
-class CycleAllowance(Base):
+class CycleAllowance(WorkspaceOwned, Base):
     __tablename__ = "cycle_allowances"
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_cycle_allowances_amount_nonnegative"),

@@ -26,6 +26,7 @@ export type ImportBatch = {
 
 export type Category = {
   id: number;
+  code: string | null;
   name: string;
   parent_category_id: number | null;
   default_priority: SpendingPriority;
@@ -58,6 +59,7 @@ export type ReviewQueueResponse = {
 
 export type CategoryTotal = {
   category_id: number;
+  category_code: string | null;
   category_name: string;
   currency: string;
   total_amount: number;
@@ -226,6 +228,7 @@ export type Transaction = {
   merchant_id: number | null;
   merchant_name: string | null;
   category_id: number | null;
+  category_code: string | null;
   category_name: string | null;
   confidence_score: string | null;
 };
@@ -286,4 +289,18 @@ export type RecurringOpportunity = {
   decision: "review" | "planned" | "accepted" | "rejected";
   notes: string | null;
 };
+export interface AuthUser {
+  id: number;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  workspace_id: number;
+  email_verified: boolean;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+  expires_at: string;
+  csrf_token: string | null;
+}
 

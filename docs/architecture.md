@@ -95,9 +95,12 @@ Statement import accepts CSV and XLSX directly. Text-based PDFs are supported wh
 produces a comma- or tab-delimited table; scanned or unstructured PDFs must be converted before
 upload to avoid unreliable financial parsing.
 
-The application is currently unauthenticated and intended for trusted local use. The staged
-server-session and multi-user authorisation design is documented in
-`docs/authentication-strategy.md`.
+The application uses Argon2id passwords, opaque server-side sessions, CSRF protection, verified
+email addresses, and workspace-scoped financial data. Public authentication pages are separated
+from the protected workspace shell, while every API remains responsible for its own authentication
+and authorisation boundary. Account owners can change passwords and email addresses, delete a
+single-member workspace, and administrators can manage users and inspect account audit events.
+Operational details are documented in `docs/authentication-strategy.md`.
 
 Safe-spending planning is stored separately from imported bank data. Categories provide a default
 spending priority and individual expenses may override it. Payment cycles hold the expected income

@@ -43,6 +43,8 @@ def test_seed_creates_the_complete_hierarchy(session: Session) -> None:
     assert housing is not None
     assert rent is not None
     assert rent.parent_category_id == housing.id
+    assert housing.code == "housing"
+    assert rent.code == "housing.rent"
     assert housing.default_priority is SpendingPriority.PROTECTED
     assert rent.default_priority is SpendingPriority.PROTECTED
     groceries = session.scalar(select(Category).where(Category.name == "Groceries"))
@@ -71,3 +73,20 @@ def test_seed_is_idempotent_and_preserves_existing_categories(session: Session) 
     assert len([category for category in categories if category.name == "Housing"]) == 1
     assert custom_housing.parent_category_id is None
     assert custom_housing.default_priority is SpendingPriority.ADJUSTABLE
+
+
+def test_seed_repairs_known_category_hierarchy_without_moving_custom_categories(
+    session: Session,
+) -> None:
+    wrong_parent = Category(name="Wrong parent")
+    rent = Category(name="Rent", code="housing.rent", parent=wrong_parent)
+    custom = Category(name="Custom", parent=wrong_parent)
+    session.add_all([rent, custom])
+    session.commit()
+
+    seed_categories(session)
+
+    housing = session.scalar(select(Category).where(Category.code == "housing"))
+    assert housing is not None
+    assert rent.parent is housing
+    assert custom.parent is wrong_parent

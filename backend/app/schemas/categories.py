@@ -5,6 +5,7 @@ from app.models import SpendingPriority
 
 class CategoryItem(BaseModel):
     id: int
+    code: str | None
     name: str
     parent_category_id: int | None
     default_priority: SpendingPriority

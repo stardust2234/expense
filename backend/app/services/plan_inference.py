@@ -139,9 +139,14 @@ def infer_plan(
     for row in relevant:
         grouped[row.identity_key].append(row)
 
+    income_by_category: defaultdict[int, list[TransactionEvidence]] = defaultdict(list)
+    for row in relevant:
+        if row.cash_flow_kind == "income" and row.amount > 0:
+            income_by_category[row.category_id].append(row)
+
     income_groups = [
         (rows, pattern)
-        for rows in grouped.values()
+        for rows in income_by_category.values()
         if rows[0].cash_flow_kind == "income"
         and all(row.amount > 0 for row in rows)
         and (pattern := _monthly_pattern(rows, minimum_occurrences=2)) is not None
@@ -156,10 +161,14 @@ def infer_plan(
         income_groups,
         key=lambda item: (item[1].confidence, len(item[1].occurrence_ids), item[1].typical_amount),
     )
-    payment_day = round(median(row.transaction_date.day for row in income_rows))
+    income_rows_by_id = {row.transaction_id: row for row in income_rows}
+    stable_income_rows = [
+        income_rows_by_id[transaction_id] for transaction_id in income_pattern.occurrence_ids
+    ]
+    payment_day = round(median(row.transaction_date.day for row in stable_income_rows))
     income = IncomeProposal(
-        proposal_id=f"income:{income_rows[0].identity_key}",
-        description=income_rows[-1].description,
+        proposal_id=f"income:category:{income_rows[0].category_id}",
+        description=stable_income_rows[-1].description,
         expected_amount=income_pattern.typical_amount,
         payment_date=_date_in_month(target_month, payment_day),
         occurrence_count=len(income_pattern.occurrence_ids),

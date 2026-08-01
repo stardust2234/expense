@@ -8,7 +8,11 @@ describe("application routes", () => {
     expect(
       routes.filter((route) => route.name).map((route) => route.path),
     ).toEqual([
+      "/login",
+      "/verify-email",
+      "/reset-password",
       "/dashboard",
+      "/account",
       "/imports",
       "/plan",
       "/review",
@@ -21,7 +25,7 @@ describe("application routes", () => {
   });
 
   it("navigates directly to a workspace URL", async () => {
-    const router = createAppRouter(createMemoryHistory());
+    const router = createAppRouter(createMemoryHistory(), async () => true);
     await router.push("/reports");
 
     expect(router.currentRoute.value.name).toBe("reports");
@@ -29,11 +33,19 @@ describe("application routes", () => {
   });
 
   it("redirects unknown URLs to the dashboard", async () => {
-    const router = createAppRouter(createMemoryHistory());
+    const router = createAppRouter(createMemoryHistory(), async () => true);
     await router.push("/does-not-exist");
 
     expect(router.currentRoute.value.name).toBe("dashboard");
     expect(router.currentRoute.value.path).toBe("/dashboard");
+  });
+
+  it("redirects an unauthenticated workspace route to login", async () => {
+    const router = createAppRouter(createMemoryHistory(), async () => false);
+    await router.push("/reports");
+
+    expect(router.currentRoute.value.name).toBe("login");
+    expect(router.currentRoute.value.query.redirect).toBe("/reports");
   });
 });
 

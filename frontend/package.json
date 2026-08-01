@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "../scripts/create-dev-cert.sh && vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
@@ -12,8 +12,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@intlify/devtools-types": "11.1.12",
+    "@lucide/vue": "^1.28.0",
     "plotly.js-basic-dist-min": "^3.7.0",
     "vue": "^3.5.0",
+    "vue-i18n": "11.1.12",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import { createApp, nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n, setAppLocale } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   paymentCycles: vi.fn(),
@@ -67,6 +68,7 @@ async function settle() {
 }
 
 beforeEach(() => {
+  setAppLocale("en");
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-07-25T12:00:00"));
   apiMock.paymentCycles.mockResolvedValue({
@@ -86,10 +88,26 @@ afterEach(() => {
 });
 
 describe("Dashboard cycle timing", () => {
+  it("renders translated content and locale-aware money in French", async () => {
+    setAppLocale("fr");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const app = createApp(DashboardView);
+    app.use(i18n);
+    app.component("RouterLink", { template: "<a><slot /></a>" });
+    app.mount(host);
+    await settle();
+
+    expect(host.textContent).toContain("Tableau de bord");
+    expect(host.textContent).toContain("Solde actuellement disponible");
+    expect(host.textContent).toContain("420,00");
+  });
+
   it("selects the date-current cycle instead of an old expected payment", async () => {
     const host = document.createElement("div");
     document.body.append(host);
     const app = createApp(DashboardView);
+    app.use(i18n);
     app.component("RouterLink", { template: "<a><slot /></a>" });
     app.mount(host);
     await settle();
@@ -103,6 +121,7 @@ describe("Dashboard cycle timing", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const app = createApp(DashboardView);
+    app.use(i18n);
     app.component("RouterLink", { template: "<a><slot /></a>" });
     app.mount(host);
     await settle();

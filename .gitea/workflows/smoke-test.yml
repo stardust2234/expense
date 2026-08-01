@@ -9,6 +9,12 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    env:
+      AUTH_THROTTLE_SECRET: ci-only-auth-throttle-secret-at-least-32-characters
+      PUBLIC_APP_URL: https://localhost
+      MAIL_FROM: noreply@localhost
+      CADDY_SITE_ADDRESS: localhost
+      ALLOW_REGISTRATION: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,3 +22,4 @@ jobs:
       - name: Run full-stack smoke test
         run: |
           make smoke-test
+

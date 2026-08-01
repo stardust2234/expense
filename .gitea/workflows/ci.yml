@@ -41,6 +41,11 @@ jobs:
   build-validation:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      AUTH_THROTTLE_SECRET: ci-only-auth-throttle-secret-at-least-32-characters
+      PUBLIC_APP_URL: https://localhost
+      MAIL_FROM: noreply@localhost
+      CADDY_SITE_ADDRESS: localhost
     steps:
       - name: Checkout
         uses: actions/checkout@v4

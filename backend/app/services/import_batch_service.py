@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import ImportBatch, TransactionStatus
+from app.models import Expense, ImportBatch, TransactionStatus
 
 
 class ImportBatchNotFoundError(LookupError):
@@ -18,6 +18,9 @@ class ImportBatchConflictError(ValueError):
 class ImportBatchPage:
     items: list[ImportBatch]
     total: int
+
+
+ACTIVE_IMPORT_STATUSES = {"queued", "processing"}
 
 
 def list_import_batches(
@@ -54,6 +57,22 @@ def get_import_batch(session: Session, *, batch_id: int) -> ImportBatch:
     if batch is None:
         raise ImportBatchNotFoundError(f"Import batch {batch_id} was not found")
     return batch
+
+
+def delete_import_batch(session: Session, *, batch_id: int) -> None:
+    """Delete an import and all transaction data created from it."""
+    batch = get_import_batch(session, batch_id=batch_id)
+    if batch.processing_status in ACTIVE_IMPORT_STATUSES:
+        raise ImportBatchConflictError(
+            f"Import batch {batch_id} cannot be deleted while it is {batch.processing_status}"
+        )
+
+    expenses = session.scalars(select(Expense).where(Expense.import_batch_id == batch_id)).all()
+    for expense in expenses:
+        session.delete(expense)
+    session.flush()
+    session.delete(batch)
+    session.commit()
 
 
 def find_duplicate_batch(session: Session, *, content_sha256: str) -> ImportBatch | None:

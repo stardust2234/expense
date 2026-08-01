@@ -163,6 +163,30 @@ def test_requires_repeated_monthly_income() -> None:
         )
 
 
+def test_groups_changing_income_references_by_category_and_stable_pattern() -> None:
+    common = {
+        "category_id": 1,
+        "category_name": "Benefits",
+        "root_category_name": "Income",
+        "priority": "transfer",
+        "kind": "income",
+    }
+    evidence = (
+        _evidence(1, date(2026, 4, 29), "description:201w94e0h dwp uc", 90014, **common),
+        _evidence(2, date(2026, 5, 28), "description:202x13840 dwp uc", 92490, **common),
+        _evidence(3, date(2026, 6, 24), "description:hmrc paye", 81560, **common),
+        _evidence(4, date(2026, 6, 29), "description:202y23335 dwp uc", 92490, **common),
+        _evidence(5, date(2026, 7, 30), "description:202y25x4b dwp uc", 92490, **common),
+    )
+
+    preview = infer_plan(evidence, target_month=date(2026, 8, 1), currency="GBP")
+
+    assert preview.income.proposal_id == "income:category:1"
+    assert preview.income.expected_amount == 92490
+    assert preview.income.payment_date == date(2026, 8, 29)
+    assert preview.income.evidence_transaction_ids == (1, 2, 4, 5)
+
+
 def test_ignores_stale_recurrence_and_nets_refunds_from_allowances() -> None:
     common_income = {
         "category_id": 1,

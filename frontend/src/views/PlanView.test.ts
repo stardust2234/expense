@@ -1,5 +1,6 @@
 import { createApp, nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n, setAppLocale } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   paymentCycles: vi.fn(),
@@ -115,6 +116,7 @@ function inputValue(input: HTMLInputElement, value: string) {
 }
 
 beforeEach(async () => {
+  setAppLocale("en");
   vi.clearAllMocks();
   apiMock.paymentCycles.mockResolvedValue({
     items: [cycle],
@@ -170,7 +172,7 @@ beforeEach(async () => {
 
   host = document.createElement("div");
   document.body.append(host);
-  createApp(PlanView).mount(host);
+  createApp(PlanView).use(i18n).mount(host);
   await settle();
 });
 
@@ -179,6 +181,15 @@ afterEach(() => {
 });
 
 describe("Plan page editing", () => {
+  it("switches the plan interface to French", async () => {
+    setAppLocale("fr");
+    await nextTick();
+
+    expect(host.textContent).toContain("Budget financier");
+    expect(host.textContent).toContain("Créer à partir des transactions importées");
+    expect(host.textContent).toContain("Factures dues avant le versement");
+  });
+
   it("previews and confirms a transaction-inferred plan", async () => {
     const inferencePanel = [...host.querySelectorAll("article")].find((item) =>
       item.textContent?.includes("Build from imported transactions"),

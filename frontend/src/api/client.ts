@@ -21,37 +21,13 @@ import type {
   Transaction,
 } from "../types/api";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init);
-  if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      message = payload.detail ?? message;
-    } catch {
-      // Keep the status-based fallback for non-JSON errors.
-    }
-    throw new ApiError(message, response.status);
-  }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return (await response.json()) as T;
-}
+import { authApi } from "./auth";
+import { apiBaseUrl, request } from "./request";
+export { ApiError, resetApiSecurityState } from "./request";
 
 export const api = {
   health: () => request<HealthResponse>("/health"),
+  ...authApi,
 
   importStatement: (file: File, defaultCurrency: string) => {
     const form = new FormData();
@@ -68,6 +44,8 @@ export const api = {
   importBatch: (batchId: number) => request<ImportBatch>(`/imports/${batchId}`),
   retryImport: (batchId: number) =>
     request<ImportBatch>(`/imports/${batchId}/retry`, { method: "POST" }),
+  deleteImport: (batchId: number) =>
+    request<void>(`/imports/${batchId}`, { method: "DELETE" }),
 
   categories: async () => (await request<{ items: Category[] }>("/categories")).items,
   createCategory: (

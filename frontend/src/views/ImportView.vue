@@ -1,19 +1,30 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { UploadCloud } from "@lucide/vue";
+import { useI18n } from "vue-i18n";
 
 import { api } from "../api/client";
 import type { ImportBatch } from "../types/api";
 import { formatUkDateTime } from "../utils/date";
+import { defaultCurrencyForLocale } from "../utils/currency";
 
 const selectedFile = ref<File | null>(null);
-const defaultCurrency = ref("GBP");
+const { locale, t } = useI18n();
+const defaultCurrency = ref(defaultCurrencyForLocale(locale.value));
 const importing = ref(false);
 const error = ref("");
 const result = ref<ImportBatch | null>(null);
 const history = ref<ImportBatch[]>([]);
 const historyTotal = ref(0);
 const retryingBatchId = ref<number | null>(null);
+const deletingBatchId = ref<number | null>(null);
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+watch(locale, (nextLocale, previousLocale) => {
+  if (defaultCurrency.value === defaultCurrencyForLocale(previousLocale)) {
+    defaultCurrency.value = defaultCurrencyForLocale(nextLocale);
+  }
+});
 
 const jobRunning = computed(() =>
   result.value ? ["queued", "processing"].includes(result.value.status) : false,
@@ -36,7 +47,7 @@ async function loadHistory() {
       schedulePoll(active.id);
     }
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not load import history";
+    error.value = caught instanceof Error ? caught.message : t("views.import.errors.history");
   }
 }
 
@@ -53,7 +64,7 @@ async function pollBatch(batchId: number) {
       schedulePoll(batchId);
     }
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not refresh import status";
+    error.value = caught instanceof Error ? caught.message : t("views.import.errors.refresh");
   }
 }
 
@@ -66,7 +77,7 @@ async function submitImport() {
     await loadHistory();
     schedulePoll(result.value.id);
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Import failed";
+    error.value = caught instanceof Error ? caught.message : t("views.import.errors.upload");
   } finally {
     importing.value = false;
   }
@@ -80,9 +91,31 @@ async function retryImport(batch: ImportBatch) {
     await loadHistory();
     schedulePoll(batch.id);
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not retry import";
+    error.value = caught instanceof Error ? caught.message : t("views.import.errors.retry");
   } finally {
     retryingBatchId.value = null;
+  }
+}
+
+async function deleteImport(batch: ImportBatch) {
+  const confirmed = window.confirm(
+    t("importDetail.deleteConfirm", { id: batch.id, file: batch.source_filename }),
+  );
+  if (!confirmed) return;
+
+  deletingBatchId.value = batch.id;
+  error.value = "";
+  try {
+    await api.deleteImport(batch.id);
+    if (result.value?.id === batch.id) {
+      clearTimeout(pollTimer);
+      result.value = null;
+    }
+    await loadHistory();
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : t("views.import.errors.delete");
+  } finally {
+    deletingBatchId.value = null;
   }
 }
 
@@ -94,28 +127,28 @@ onBeforeUnmount(() => clearTimeout(pollTimer));
   <section class="view-stack">
     <header class="view-heading">
       <div>
-        <p class="eyebrow">Start here</p>
-        <h2>Import transactions</h2>
-        <p>Upload CSV, Excel or a text-based PDF. Every source row is retained before cleaning.</p>
+        <p class="eyebrow">{{ t("views.import.eyebrow") }}</p>
+        <h2>{{ t("views.import.title") }}</h2>
+        <p>{{ t("views.import.subtitle") }}</p>
       </div>
     </header>
 
     <div class="panel import-panel">
       <form class="import-form" @submit.prevent="submitImport">
         <label class="drop-zone">
-          <span class="drop-icon">↑</span>
-          <strong>{{ selectedFile?.name ?? "Choose a bank statement" }}</strong>
-          <small>CSV, XLSX or text-based PDF · Maximum 10 MiB</small>
+          <span class="drop-icon"><UploadCloud :size="19" :stroke-width="1.5" /></span>
+          <strong>{{ selectedFile?.name ?? t("views.import.choose") }}</strong>
+          <small>{{ t("views.import.types") }}</small>
           <input type="file" accept=".csv,.xlsx,.pdf,text/csv,application/pdf" @change="selectFile" />
         </label>
 
         <label class="field compact-field">
-          <span>Fallback currency</span>
-          <input v-model="defaultCurrency" maxlength="3" placeholder="GBP" />
+          <span>{{ t("views.import.fallbackCurrency") }}</span>
+          <input v-model="defaultCurrency" maxlength="3" :placeholder="defaultCurrencyForLocale(locale)" />
         </label>
 
         <button class="primary-button" type="submit" :disabled="!selectedFile || importing || jobRunning">
-          {{ importing ? "Queueing import…" : jobRunning ? "Pipeline running…" : "Import and categorise" }}
+          {{ importing ? t("views.import.queueing") : jobRunning ? t("views.import.running") : t("views.import.submit") }}
         </button>
       </form>
 
@@ -124,66 +157,74 @@ onBeforeUnmount(() => clearTimeout(pollTimer));
 
     <div v-if="result" class="result-grid" aria-live="polite">
       <article class="metric-card accent-blue">
-        <span>Imported</span>
+        <span>{{ t("views.import.imported") }}</span>
         <strong>{{ result.total_rows }}</strong>
       </article>
       <article class="metric-card accent-violet">
-        <span>Normalised</span>
+        <span>{{ t("views.import.normalised") }}</span>
         <strong>{{ result.normalised_rows }}</strong>
       </article>
       <article class="metric-card accent-green">
-        <span>Categorised</span>
+        <span>{{ t("views.import.categorised") }}</span>
         <strong>{{ result.categorised_rows }}</strong>
       </article>
       <article class="metric-card accent-orange">
-        <span>Needs review</span>
+        <span>{{ t("views.import.review") }}</span>
         <strong>{{ result.needs_review_rows }}</strong>
       </article>
       <p v-if="jobRunning" class="message result-warning">
-        Batch {{ result.id }} is {{ result.status }}. This page will update automatically.
+        {{ t("importDetail.running", { id: result.id, status: result.status }) }}
       </p>
       <p v-else-if="result.processing_error" class="message error-message result-warning">
-        Pipeline failed: {{ result.processing_error }}
+        {{ t("importDetail.failed", { error: result.processing_error }) }}
       </p>
       <p v-else-if="result.failed_rows" class="message error-message result-warning">
-        {{ result.failed_rows }} row(s) could not be normalised.
+        {{ t("importDetail.normalisationFailed", { count: result.failed_rows }) }}
       </p>
       <p v-if="result.duplicate_rows" class="message result-warning">
-        {{ result.duplicate_rows }} row(s) matched transactions imported earlier and were skipped.
+        {{ t("importDetail.duplicates", { count: result.duplicate_rows }) }}
       </p>
     </div>
 
     <article class="panel report-panel">
       <div class="panel-title">
-        <h3>Import history</h3>
-        <span>{{ historyTotal }} batches</span>
+        <h3>{{ t("views.import.history") }}</h3>
+        <span>{{ t("views.import.batches", { count: historyTotal }) }}</span>
       </div>
-      <div v-if="!history.length" class="table-empty">No statements imported yet.</div>
+      <div v-if="!history.length" class="table-empty">{{ t("views.import.empty") }}</div>
       <div v-else class="table-wrap">
         <table>
           <thead>
-            <tr><th>Imported</th><th>File</th><th>Rows</th><th>Outcome</th><th></th></tr>
+            <tr><th>{{ t("views.import.imported") }}</th><th>{{ t("views.import.file") }}</th><th>{{ t("views.import.rows") }}</th><th>{{ t("views.import.outcome") }}</th><th></th></tr>
           </thead>
           <tbody>
             <tr v-for="batch in history" :key="batch.id">
               <td>{{ formatUkDateTime(batch.imported_at) }}</td>
-              <td><strong>{{ batch.source_filename }}</strong><br /><span class="muted">{{ batch.source_type.toUpperCase() }} · Batch {{ batch.id }}</span></td>
-              <td>{{ batch.normalised_rows }}/{{ batch.total_rows }} normalised<span v-if="batch.duplicate_rows" class="muted"> · {{ batch.duplicate_rows }} duplicates skipped</span></td>
+              <td><strong>{{ batch.source_filename }}</strong><br /><span class="muted">{{ batch.source_type.toUpperCase() }} · {{ t("importDetail.batch", { id: batch.id }) }}</span></td>
+              <td>{{ t("importDetail.rowSummary", { normalised: batch.normalised_rows, total: batch.total_rows }) }}<span v-if="batch.duplicate_rows" class="muted"> · {{ t("importDetail.duplicatesShort", { count: batch.duplicate_rows }) }}</span></td>
               <td>
-                <span class="status-pill">{{ batch.status.replace(/_/g, " ") }}</span>
-                <span v-if="batch.failed_rows" class="muted"> · {{ batch.failed_rows }} failed</span>
-                <span v-else class="muted"> · {{ batch.categorised_rows }} categorised, {{ batch.needs_review_rows }} review</span>
+                <span class="status-pill" :class="batch.status">{{ t(`dynamic.importStatuses.${batch.status}`) }}</span>
+                <span v-if="batch.failed_rows" class="muted"> · {{ t("importDetail.failedShort", { count: batch.failed_rows }) }}</span><span v-else class="muted"> · {{ t("importDetail.outcome", { categorised: batch.categorised_rows, review: batch.needs_review_rows }) }}</span>
               </td>
-              <td>
+              <td><div class="row-actions">
                 <button
                   v-if="batch.failed_rows || batch.status === 'failed'"
                   class="text-button"
                   :disabled="retryingBatchId === batch.id"
                   @click="retryImport(batch)"
                 >
-                  {{ retryingBatchId === batch.id ? "Retrying…" : "Retry failed rows" }}
+                  {{ retryingBatchId === batch.id ? t("views.import.retrying") : t("views.import.retry") }}
                 </button>
-              </td>
+                <button
+                  v-if="!['queued', 'processing'].includes(batch.status)"
+                  class="text-button danger"
+                  type="button"
+                  :disabled="deletingBatchId === batch.id"
+                  @click="deleteImport(batch)"
+                >
+                  {{ deletingBatchId === batch.id ? t("views.import.deleting") : t("views.import.delete") }}
+                </button>
+              </div></td>
             </tr>
           </tbody>
         </table>

@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 if TYPE_CHECKING:
     from app.models.categorisation_rule import CategorisationRule
@@ -42,7 +43,7 @@ class TransactionStatus(str, Enum):
     NEEDS_REVIEW = "needs_review"
 
 
-class Expense(Base):
+class Expense(WorkspaceOwned, Base):
     __tablename__ = "expenses"
     __table_args__ = (
         CheckConstraint("length(currency) = 3", name="ck_expenses_currency_length"),

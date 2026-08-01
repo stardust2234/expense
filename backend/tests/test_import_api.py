@@ -14,6 +14,7 @@ from app.models import (
     CategorisationRule,
     Category,
     Expense,
+    ImportBatch,
     Merchant,
     MerchantAlias,
     RawTransaction,
@@ -218,6 +219,69 @@ async def test_duplicate_history_and_failed_batch_retry(session: Session) -> Non
     assert detail["needs_review_rows"] == 1
     assert detail["failed_rows"] == 0
     assert retry_again.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_completed_import_can_be_deleted_with_its_transactions(
+    session: Session,
+) -> None:
+    async def override_database_session() -> AsyncIterator[Session]:
+        yield session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            uploaded = await client.post(
+                "/api/imports/file",
+                files={"file": ("delete-me.csv", CSV_CONTENT, "text/csv")},
+            )
+            batch_id = uploaded.json()["id"]
+            await wait_for_import(client, batch_id)
+            raw_id = session.scalar(select(RawTransaction.id))
+            expense_ids = list(session.scalars(select(Expense.id)))
+
+            deleted = await client.delete(f"/api/imports/{batch_id}")
+            missing = await client.get(f"/api/imports/{batch_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
+    session.expire_all()
+    assert session.get(ImportBatch, batch_id) is None
+    assert raw_id is not None and session.get(RawTransaction, raw_id) is None
+    assert expense_ids
+    assert all(session.get(Expense, expense_id) is None for expense_id in expense_ids)
+
+
+@pytest.mark.anyio
+async def test_active_import_cannot_be_deleted(session: Session) -> None:
+    batch = ImportBatch(
+        source_filename="running.csv",
+        source_type="csv",
+        processing_status="processing",
+    )
+    session.add(batch)
+    session.commit()
+
+    async def override_database_session() -> AsyncIterator[Session]:
+        yield session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.delete(f"/api/imports/{batch.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert session.get(ImportBatch, batch.id) is batch
 
 
 @pytest.mark.anyio

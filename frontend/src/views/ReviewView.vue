@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { CircleCheck } from "@lucide/vue";
+import { useI18n } from "vue-i18n";
 
 import { api } from "../api/client";
 import type { Category, ReviewQueueItem } from "../types/api";
 import { formatUkDate } from "../utils/date";
 import { formatMoney } from "../utils/money";
+import { formatCategoryName } from "../utils/category";
 
 const items = ref<ReviewQueueItem[]>([]);
+const { t } = useI18n();
 const categories = ref<Category[]>([]);
 const total = ref(0);
 const pageSize = 20;
@@ -20,12 +24,12 @@ const currentPage = computed(() => Math.floor(offset.value / pageSize) + 1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 
 const categoryNames = computed(
-  () => new Map(categories.value.map((category) => [category.id, category.name])),
+  () => new Map(categories.value.map((category) => [category.id, formatCategoryName(category)])),
 );
 
 function categoryLabel(category: Category) {
-  if (!category.parent_category_id) return category.name;
-  return `${categoryNames.value.get(category.parent_category_id) ?? "Other"} / ${category.name}`;
+  if (!category.parent_category_id) return formatCategoryName(category);
+  return `${categoryNames.value.get(category.parent_category_id) ?? t("views.review.other")} / ${formatCategoryName(category)}`;
 }
 
 async function loadQueue() {
@@ -43,7 +47,7 @@ async function loadQueue() {
       patterns.value[item.id] = item.merchant_name ?? item.normalised_description;
     }
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not load review queue";
+    error.value = caught instanceof Error ? caught.message : t("views.review.errors.load");
   } finally {
     loading.value = false;
   }
@@ -61,7 +65,7 @@ async function resolve(item: ReviewQueueItem) {
     }
     await loadQueue();
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not save correction";
+    error.value = caught instanceof Error ? caught.message : t("views.review.errors.save");
   } finally {
     savingId.value = null;
   }
@@ -79,19 +83,16 @@ onMounted(loadQueue);
   <section class="view-stack">
     <header class="view-heading split-heading">
       <div>
-        <p class="eyebrow">Human in the loop</p>
-        <h2>Review queue</h2>
-        <p>Choose a category and save a reusable matching rule in one step.</p>
+        <p class="eyebrow">{{ t("views.review.eyebrow") }}</p><h2>{{ t("views.review.title") }}</h2><p>{{ t("views.review.subtitle") }}</p>
       </div>
-      <div class="queue-count"><strong>{{ total }}</strong><span>waiting</span></div>
+      <div class="queue-count"><strong>{{ total }}</strong><span>{{ t("views.review.waiting") }}</span></div>
     </header>
 
     <p v-if="error" class="message error-message">{{ error }}</p>
-    <div v-if="loading" class="panel empty-state">Loading review queue…</div>
+    <div v-if="loading" class="panel empty-state">{{ t("views.review.loading") }}</div>
     <div v-else-if="!items.length" class="panel empty-state">
-      <span class="empty-icon">✓</span>
-      <h3>All caught up</h3>
-      <p>No transactions need manual review.</p>
+      <span class="empty-icon"><CircleCheck :size="22" :stroke-width="1.5" /></span>
+      <h3>{{ t("views.review.caughtUp") }}</h3><p>{{ t("views.review.empty") }}</p>
     </div>
 
     <div v-else class="review-list">
@@ -101,7 +102,7 @@ onMounted(loadQueue);
             <span class="date-chip">{{ formatUkDate(item.transaction_date) }}</span>
             <h3>{{ item.description }}</h3>
             <p>
-              {{ item.merchant_name ?? "Merchant not identified" }}
+              {{ item.merchant_name ?? t("views.review.merchantUnknown") }}
               <span v-if="item.source_filename">· {{ item.source_filename }}:{{ item.source_row_number }}</span>
             </p>
           </div>
@@ -110,16 +111,16 @@ onMounted(loadQueue);
 
         <div class="review-controls">
           <label class="field">
-            <span>Category</span>
+            <span>{{ t("common.category") }}</span>
             <select v-model="selectedCategories[item.id]">
-              <option value="" disabled>Select a category</option>
+              <option value="" disabled>{{ t("views.review.selectCategory") }}</option>
               <option v-for="category in categories" :key="category.id" :value="String(category.id)">
                 {{ categoryLabel(category) }}
               </option>
             </select>
           </label>
           <label class="field">
-            <span>Save matching rule</span>
+            <span>{{ t("views.review.saveRule") }}</span>
             <input v-model="patterns[item.id]" maxlength="500" />
           </label>
           <button
@@ -127,15 +128,15 @@ onMounted(loadQueue);
             :disabled="!selectedCategories[item.id] || savingId === item.id"
             @click="resolve(item)"
           >
-            {{ savingId === item.id ? "Saving…" : "Assign & save rule" }}
+            {{ savingId === item.id ? t("views.review.saving") : t("views.review.assign") }}
           </button>
         </div>
       </article>
     </div>
-    <nav v-if="total" class="pagination" aria-label="Review queue pages">
-      <button class="secondary-button" :disabled="offset === 0 || loading" @click="changePage(-1)">Previous</button>
-      <span>Page {{ currentPage }} of {{ totalPages }} · {{ total }} waiting</span>
-      <button class="secondary-button" :disabled="offset + pageSize >= total || loading" @click="changePage(1)">Next</button>
+    <nav v-if="total" class="pagination" :aria-label="t('views.review.pages')">
+      <button class="secondary-button" :disabled="offset === 0 || loading" @click="changePage(-1)">{{ t("views.review.previous") }}</button>
+      <span>{{ t("views.review.page", { page: currentPage, pages: totalPages, count: total }) }}</span>
+      <button class="secondary-button" :disabled="offset + pageSize >= total || loading" @click="changePage(1)">{{ t("views.review.next") }}</button>
     </nav>
   </section>
 </template>

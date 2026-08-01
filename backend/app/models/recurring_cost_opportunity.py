@@ -6,6 +6,7 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 
 class OpportunityDifficulty(str, Enum):
@@ -21,7 +22,7 @@ class OpportunityDecision(str, Enum):
     REJECTED = "rejected"
 
 
-class RecurringCostOpportunity(Base):
+class RecurringCostOpportunity(WorkspaceOwned, Base):
     __tablename__ = "recurring_cost_opportunities"
     __table_args__ = (
         CheckConstraint("current_monthly_cost >= 0", name="ck_opportunity_current_nonnegative"),
@@ -34,7 +35,12 @@ class RecurringCostOpportunity(Base):
             name="ck_opportunity_switching_cost_nonnegative",
         ),
         CheckConstraint("length(currency) = 3", name="ck_opportunity_currency_length"),
-        UniqueConstraint("identity_key", "currency", name="uq_opportunity_identity_currency"),
+        UniqueConstraint(
+            "workspace_id",
+            "identity_key",
+            "currency",
+            name="uq_opportunity_workspace_identity_currency",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

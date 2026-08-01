@@ -49,7 +49,7 @@ smoke-test: ## Verify the full stack through Caddy and the API health endpoint
 	@DOCKER_COMPOSE='$(DOCKER_COMPOSE)' COMPOSE_FILE='$(COMPOSE_FILE)' bash scripts/smoke-test.sh
 
 backend-run: ## Start the FastAPI app locally
-	@cd backend && $(PYTHON) -m uvicorn app.main:app --reload
+	@cd backend && AUTH_COOKIE_SECURE=true $(PYTHON) -m uvicorn app.main:app --reload
 
 database-upgrade: ## Apply all pending database migrations
 	@cd backend && $(PYTHON) -m alembic upgrade head
@@ -65,6 +65,9 @@ database-check: ## Apply migrations to a clean SQLite database and detect model 
 
 frontend-run: ## Start the Vite frontend locally
 	@cd frontend && npm run dev
+
+dev-certificate: ## Generate the local HTTPS certificate (set DEV_HOST for a specific LAN IP/name)
+	@DEV_HOST="$(DEV_HOST)" bash scripts/create-dev-cert.sh
 
 backend-lint: ## Run backend lint checks
 	@cd backend && $(PYTHON) -m ruff check .

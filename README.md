@@ -19,7 +19,9 @@ make setup
 make check
 ```
 
-For local development, set `APP_ENV=development` in `.env`.
+For local development, set `APP_ENV=development` and `CADDY_SITE_ADDRESS=:80` in `.env`.
+The Vite server uses a locally generated HTTPS certificate and the Makefile starts the API with
+secure authentication cookies.
 
 `make check` runs backend formatting and lint checks, all tests, a clean SQLite migration
 upgrade/drift check, frontend type checking, and a production frontend build. Dependency audits
@@ -38,20 +40,42 @@ make backend-run
 make frontend-run
 ```
 
+The first frontend start creates a private development CA under `data/dev-tls/`. Trust
+`data/dev-tls/folio-dev-ca.pem` in every operating system or browser that opens the application.
+For LAN access, include a specific address when generating the certificate if it is not detected:
+
+```bash
+make dev-certificate DEV_HOST=192.168.10.84
+make frontend-run
+```
+
+Then use `https://192.168.10.84:5173`. Never use the HTTP URL for registration or login. The CA
+private key and generated certificates stay under ignored runtime data and must not be committed.
+
 ## Container deployment
 
-The default Compose deployment listens on `http://localhost:8080`, runs the API in production
-mode, applies migrations, seeds the category hierarchy idempotently, and serves the compiled
-frontend through Caddy:
+The default Compose deployment expects a public HTTPS hostname, runs the API in production mode,
+applies migrations, seeds the initial workspace category hierarchy idempotently, and serves the
+compiled frontend through Caddy:
 
 ```bash
 cp .env.example .env
+# Set CADDY_SITE_ADDRESS to your DNS name and replace AUTH_THROTTLE_SECRET.
+# Example secret generation: openssl rand -hex 32
 make up
 ```
 
-To access the application from another device on a trusted LAN, use
-`http://<host-ip>:8080`. Change `CADDY_HTTP_PORT` if that port is occupied. Set
-`CADDY_BIND_ADDRESS=127.0.0.1` to prevent connections from other devices.
+Point the hostname in `CADDY_SITE_ADDRESS` at the server and allow TCP ports 80 and 443 plus UDP
+443. Caddy obtains and persists TLS certificates in named Docker volumes. Never commit the real
+`.env` file or reuse `AUTH_THROTTLE_SECRET` between deployments. Keep `AUTH_COOKIE_SECURE=true` in
+production. Set `ALLOW_REGISTRATION=true` for initial enrolment; set it to `false` if public
+self-registration is not intended after accounts have been created.
+
+The first account additionally requires `ADMIN_BOOTSTRAP_SECRET`, entered as the administrator
+setup token on the registration page. Generate a separate random value with `openssl rand -hex
+32`. The server checks it inside the atomic first-user transaction and ignores it after an
+administrator exists. Remove it from `.env` after the first administrator has registered. If the
+secret is missing before setup, initial registration fails closed.
 
 SQLite data, WAL files, and imported transaction records are stored under the host's `data/`
 directory, which is excluded from Git. Uploaded statement contents are stored as database rows;
@@ -83,10 +107,14 @@ Do not run multiple API containers against this SQLite database. Imports use a t
 single-process background worker, and interrupted queued or processing jobs are resumed when the
 API starts.
 
-The application currently has no authentication boundary. Expose it only on a trusted machine or
-LAN behind an access-controlled reverse proxy. See
-[`docs/authentication-strategy.md`](docs/authentication-strategy.md) before internet exposure or
-multi-user use.
+The application uses Argon2id passwords, verified email addresses, password recovery, opaque
+server-side sessions, CSRF protection and workspace-scoped financial records. Email changes remain
+pending until the replacement address is verified, so a delivery failure cannot invalidate the
+working login address. The first registered administrator atomically claims the workspace containing
+data migrated from the original single-user installation. Administrators can manage workspace users
+and review account audit events from the Account page. Review the operational controls in
+[`docs/authentication-strategy.md`](docs/authentication-strategy.md) before internet exposure,
+especially encrypted backups and tested restoration.
 
 ## Product areas
 

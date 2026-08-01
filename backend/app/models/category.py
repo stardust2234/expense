@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -14,13 +14,19 @@ if TYPE_CHECKING:
     from app.models.financial_plan import Commitment, CycleAllowance
 
 from app.models.financial_plan import SpendingPriority
+from app.models.workspace_owned import WorkspaceOwned
 
 
-class Category(Base):
+class Category(WorkspaceOwned, Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "code", name="uq_categories_workspace_code"),
+        UniqueConstraint("workspace_id", "name", name="uq_categories_workspace_name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    code: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     parent_category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"),
         nullable=True,

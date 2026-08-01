@@ -34,6 +34,7 @@ def _item(expense: Expense) -> TransactionItem:
         merchant_id=expense.merchant_id,
         merchant_name=expense.merchant.name if expense.merchant else None,
         category_id=expense.category_id,
+        category_code=expense.category.code if expense.category else None,
         category_name=expense.category.name if expense.category else None,
         confidence_score=expense.confidence_score,
     )

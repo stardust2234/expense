@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import { api } from "../api/client";
 import type {
@@ -14,27 +15,13 @@ import type {
 } from "../types/api";
 import { formatUkDate, inclusiveCycleEnd } from "../utils/date";
 import { formatMoney, toMajorUnits, toMinorUnits } from "../utils/money";
+import { formatCategoryName } from "../utils/category";
+import { defaultCurrencyForLocale } from "../utils/currency";
+import { addCalendarMonth, defaultPlanDates, inputDate } from "./plan/calendar";
 
 const today = new Date();
-function firstOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1);
-}
-function addCalendarMonth(value: Date) {
-  const targetMonth = value.getMonth() + 1;
-  const lastTargetDay = new Date(value.getFullYear(), targetMonth + 1, 0).getDate();
-  return new Date(
-    value.getFullYear(),
-    targetMonth,
-    Math.min(value.getDate(), lastTargetDay),
-  );
-}
-const calendarStart = firstOfMonth(today);
-const calendarEnd = addCalendarMonth(calendarStart);
-const benefitDate = new Date(today.getFullYear(), today.getMonth(), 29);
-const firstBillDue = new Date(calendarEnd);
-firstBillDue.setDate(calendarEnd.getDate() - 1);
-const inputDate = (value: Date) =>
-  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+const { locale, t } = useI18n();
+const { calendarStart, benefitDate, firstBillDue } = defaultPlanDates(today);
 
 const cycles = ref<PaymentCycle[]>([]);
 const commitments = ref<Commitment[]>([]);
@@ -56,12 +43,12 @@ const editingCommitmentId = ref<number | null>(null);
 const editingAllowanceId = ref<number | null>(null);
 
 const cycleForm = ref({
-  name: "Benefit payment",
+  name: t("plan.defaultCycleName"),
   nextPaymentDate: inputDate(benefitDate),
   expectedIncome: "",
   openingBalance: "",
   currentBalance: "",
-  currency: "GBP",
+  currency: defaultCurrencyForLocale(locale.value) as string,
 });
 const commitmentForm = ref({
   name: "",
@@ -103,6 +90,16 @@ const allowanceEditForm = ref({
   categoryId: "",
 });
 
+watch(locale, (nextLocale, previousLocale) => {
+  if (
+    !inferencePreview.value &&
+    !selectedCycle.value &&
+    cycleForm.value.currency === defaultCurrencyForLocale(previousLocale)
+  ) {
+    cycleForm.value.currency = defaultCurrencyForLocale(nextLocale);
+  }
+});
+
 const selectedCycle = computed(
   () => cycles.value.find((cycle) => cycle.id === selectedCycleId.value) ?? null,
 );
@@ -137,7 +134,7 @@ async function previewPlan() {
     );
     cycleForm.value.currency = preview.currency;
   } catch (caught) {
-    message(caught, "Could not infer a plan from imported transactions");
+    message(caught, t("plan.errors.infer"));
   } finally {
     saving.value = false;
   }
@@ -164,7 +161,7 @@ async function confirmPlan() {
     selectedCycleId.value = result.payment_cycle_id;
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not confirm the inferred plan");
+    message(caught, t("plan.errors.confirm"));
   } finally {
     saving.value = false;
   }
@@ -193,7 +190,7 @@ async function loadPlan() {
     editingCommitmentId.value = null;
     editingAllowanceId.value = null;
   } catch (caught) {
-    message(caught, "Could not load the safe-spending plan");
+    message(caught, t("plan.errors.loadSafe"));
   }
 }
 
@@ -221,7 +218,7 @@ function startCycleCreate() {
       new Date(`${selectedCycle.value.next_payment_date}T00:00:00`),
     );
     cycleForm.value = {
-      name: selectedCycle.value.name ?? "Benefit payment",
+      name: selectedCycle.value.name ?? t("plan.defaultCycleName"),
       nextPaymentDate: inputDate(payment),
       expectedIncome: String(
         toMajorUnits(
@@ -261,7 +258,7 @@ async function saveCycle() {
     editingCycle.value = false;
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not update the payment cycle");
+    message(caught, t("plan.errors.updateCycle"));
   } finally {
     saving.value = false;
   }
@@ -282,7 +279,7 @@ async function load() {
     selectedCycleId.value = preferred?.id ?? null;
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not load the financial plan");
+    message(caught, t("plan.errors.load"));
   } finally {
     loading.value = false;
   }
@@ -318,7 +315,7 @@ async function createCycle() {
     commitmentForm.value.dueDate = inputDate(cycleEnd);
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not create the payment cycle");
+    message(caught, t("plan.errors.createCycle"));
   } finally {
     saving.value = false;
   }
@@ -326,7 +323,7 @@ async function createCycle() {
 
 async function removeCycle() {
   if (!selectedCycle.value) return;
-  if (!window.confirm("Delete this payment cycle, its bills, and its allowances?")) return;
+  if (!window.confirm(t("plan.deleteCycleConfirm"))) return;
   saving.value = true;
   error.value = "";
   try {
@@ -339,7 +336,7 @@ async function removeCycle() {
     editingCycle.value = false;
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not delete the payment cycle");
+    message(caught, t("plan.errors.deleteCycle"));
   } finally {
     saving.value = false;
   }
@@ -361,7 +358,7 @@ async function updateBalance() {
     );
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not update the usable balance");
+    message(caught, t("plan.errors.balance"));
   } finally {
     saving.value = false;
   }
@@ -389,7 +386,7 @@ async function addCommitment() {
     commitmentForm.value.amount = "";
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not add the bill");
+    message(caught, t("plan.errors.addBill"));
   } finally {
     saving.value = false;
   }
@@ -400,7 +397,7 @@ async function removeCommitment(id: number) {
     await api.deleteCommitment(id);
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not remove the bill");
+    message(caught, t("plan.errors.removeBill"));
   }
 }
 
@@ -435,7 +432,7 @@ async function saveCommitment(item: Commitment) {
     selectedCycleId.value = updated.payment_cycle_id;
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not update the bill");
+    message(caught, t("plan.errors.updateBill"));
   } finally {
     saving.value = false;
   }
@@ -462,7 +459,7 @@ async function addAllowance() {
     allowanceForm.value.amount = "";
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not add the allowance");
+    message(caught, t("plan.errors.addAllowance"));
   } finally {
     saving.value = false;
   }
@@ -473,7 +470,7 @@ async function removeAllowance(id: number) {
     await api.deleteAllowance(id);
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not remove the allowance");
+    message(caught, t("plan.errors.removeAllowance"));
   }
 }
 
@@ -509,14 +506,26 @@ async function saveAllowance(item: CycleAllowance) {
     });
     await loadPlan();
   } catch (caught) {
-    message(caught, "Could not update the allowance");
+    message(caught, t("plan.errors.updateAllowance"));
   } finally {
     saving.value = false;
   }
 }
 
 function priorityLabel(value: SpendingPriority) {
-  return value.replace("_", " ");
+  return t(`common.priorities.${value}`);
+}
+
+function statusLabel(value: PaymentCycle["status"] | Commitment["status"]) {
+  return t(`common.statuses.${value}`);
+}
+
+function allowanceTypeLabel(value: AllowanceType) {
+  return t(`common.allowanceTypes.${value}`);
+}
+
+function balanceSourceLabel(value: string) {
+  return t(`dashboard.balanceSources.${value}`);
 }
 
 onMounted(load);
@@ -526,156 +535,156 @@ onMounted(load);
   <section class="view-stack">
     <header class="view-heading split-heading">
       <div>
-        <p class="eyebrow">Until your next payment</p>
-        <h2>Financial plan</h2>
-        <p>Protect bills and essential allowances before treating the rest as available.</p>
+        <p class="eyebrow">{{ t("plan.eyebrow") }}</p>
+        <h2>{{ t("plan.title") }}</h2>
+        <p>{{ t("plan.subtitle") }}</p>
       </div>
       <div v-if="cycles.length" class="cycle-actions">
         <label class="field cycle-picker">
-          <span>Payment cycle</span>
+          <span>{{ t("common.paymentCycle") }}</span>
           <select v-model="selectedCycleId" @change="creatingCycle = false; loadPlan()">
             <option v-for="cycle in cycles" :key="cycle.id" :value="cycle.id">
-              {{ cycle.name || "Payment cycle" }} · {{ formatUkDate(cycle.start_date) }}
+              {{ cycle.name || t("common.paymentCycle") }} · {{ formatUkDate(cycle.start_date) }}
             </option>
           </select>
         </label>
-        <button class="secondary-button" @click="startCycleCreate">Add cycle</button>
+        <button class="secondary-button" @click="startCycleCreate">{{ t("plan.addCycle") }}</button>
       </div>
     </header>
 
     <p v-if="error" class="message error-message">{{ error }}</p>
-    <p v-if="loading" class="panel empty-state">Loading your financial position…</p>
+    <p v-if="loading" class="panel empty-state">{{ t("plan.loading") }}</p>
 
     <article v-if="!loading" class="panel setup-panel">
       <div class="panel-title">
-        <div><h3>Build from imported transactions</h3><span>Preview evidence first; nothing is saved until you confirm.</span></div>
+        <div><h3>{{ t("plan.inferTitle") }}</h3><span>{{ t("plan.inferNote") }}</span></div>
       </div>
       <form class="cycle-setup-form" @submit.prevent="previewPlan">
-        <label class="field"><span>Plan month</span><input v-model="inferenceTargetMonth" type="date" required /></label>
-        <label class="field"><span>Opening balance</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
-        <label class="field"><span>Current balance</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" /></label>
-        <label class="field compact-field"><span>Currency</span><input v-model="cycleForm.currency" minlength="3" maxlength="3" required /></label>
-        <button class="secondary-button" :disabled="saving">Preview inferred plan</button>
+        <label class="field"><span>{{ t("plan.planMonth") }}</span><input v-model="inferenceTargetMonth" type="date" required /></label>
+        <label class="field"><span>{{ t("plan.openingBalance") }}</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
+        <label class="field"><span>{{ t("plan.currentBalance") }}</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" /></label>
+        <label class="field compact-field"><span>{{ t("common.currency") }}</span><input v-model="cycleForm.currency" minlength="3" maxlength="3" required /></label>
+        <button class="secondary-button" :disabled="saving">{{ t("plan.preview") }}</button>
       </form>
       <div v-if="inferencePreview" class="plan-list inference-preview">
-        <div class="plan-row"><div><strong>Expected income</strong><span>{{ inferencePreview.income.description }} · {{ formatUkDate(inferencePreview.income.payment_date) }} · {{ Math.round(inferencePreview.income.confidence * 100) }}% confidence</span></div><strong>{{ formatMoney(inferencePreview.income.expected_amount, inferencePreview.currency) }}</strong></div>
+        <div class="plan-row"><div><strong>{{ t("plan.expectedIncome") }}</strong><span>{{ inferencePreview.income.description }} · {{ formatUkDate(inferencePreview.income.payment_date) }} · {{ t("plan.confidence", { value: Math.round(inferencePreview.income.confidence * 100) }) }}</span></div><strong>{{ formatMoney(inferencePreview.income.expected_amount, inferencePreview.currency) }}</strong></div>
         <label v-for="item in inferencePreview.commitments" :key="item.proposal_id" class="plan-row">
           <span><input v-model="selectedInferenceCommitments" type="checkbox" :value="item.proposal_id" /> <strong>{{ item.name }}</strong><br /><small>{{ item.category_name }} · {{ formatUkDate(item.due_date) }} · {{ Math.round(item.confidence * 100) }}%</small></span>
           <strong>{{ formatMoney(item.amount, inferencePreview.currency) }}</strong>
         </label>
         <label v-for="item in inferencePreview.allowances" :key="item.proposal_id" class="plan-row">
-          <span><input v-model="selectedInferenceAllowances" type="checkbox" :value="item.proposal_id" /> <strong>{{ item.name }} allowance</strong><br /><small>{{ item.months_observed }} months of evidence</small></span>
+          <span><input v-model="selectedInferenceAllowances" type="checkbox" :value="item.proposal_id" /> <strong>{{ t("plan.allowanceSuffix", { name: item.name }) }}</strong><br /><small>{{ t("plan.evidenceMonths", { count: item.months_observed }) }}</small></span>
           <strong>{{ formatMoney(item.amount, inferencePreview.currency) }}</strong>
         </label>
-        <div class="form-actions"><button class="primary-button" :disabled="saving" @click="confirmPlan">Confirm selected plan</button><button class="secondary-button" @click="inferencePreview = null">Cancel preview</button></div>
+        <div class="form-actions"><button class="primary-button" :disabled="saving" @click="confirmPlan">{{ t("plan.confirmPlan") }}</button><button class="secondary-button" @click="inferencePreview = null">{{ t("plan.cancelPreview") }}</button></div>
       </div>
     </article>
 
     <article v-if="!loading && (!selectedCycle || creatingCycle)" class="panel setup-panel">
       <div class="panel-title">
-        <div><h3>{{ selectedCycle ? "Add payment cycle" : "Set up your first payment cycle" }}</h3><span>Amounts are entered in pounds.</span></div>
-        <button v-if="selectedCycle" class="text-button" @click="creatingCycle = false">Cancel</button>
+        <div><h3>{{ selectedCycle ? t("plan.addPaymentCycle") : t("plan.firstCycle") }}</h3><span>{{ t("plan.poundsNote") }}</span></div>
+        <button v-if="selectedCycle" class="text-button" @click="creatingCycle = false">{{ t("common.cancel") }}</button>
       </div>
       <form class="cycle-setup-form" @submit.prevent="createCycle">
-        <label class="field"><span>Name</span><input v-model="cycleForm.name" required /></label>
-        <label class="field"><span>Benefit payment date</span><input v-model="cycleForm.nextPaymentDate" type="date" required /></label>
-        <label class="field"><span>Expected income</span><input v-model="cycleForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
-        <label class="field"><span>Opening balance</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
-        <label class="field"><span>Current usable balance</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" placeholder="Same as opening" /></label>
-        <label class="field compact-field"><span>Currency</span><input v-model="cycleForm.currency" minlength="3" maxlength="3" required /></label>
-        <button class="primary-button" :disabled="saving">Create payment cycle</button>
+        <label class="field"><span>{{ t("common.name") }}</span><input v-model="cycleForm.name" required /></label>
+        <label class="field"><span>{{ t("plan.benefitDate") }}</span><input v-model="cycleForm.nextPaymentDate" type="date" required /></label>
+        <label class="field"><span>{{ t("plan.expectedIncome") }}</span><input v-model="cycleForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
+        <label class="field"><span>{{ t("plan.openingBalance") }}</span><input v-model="cycleForm.openingBalance" type="number" step="0.01" required /></label>
+        <label class="field"><span>{{ t("plan.usableBalance") }}</span><input v-model="cycleForm.currentBalance" type="number" step="0.01" :placeholder="t('plan.sameAsOpening')" /></label>
+        <label class="field compact-field"><span>{{ t("common.currency") }}</span><input v-model="cycleForm.currency" minlength="3" maxlength="3" required /></label>
+        <button class="primary-button" :disabled="saving">{{ t("plan.createCycle") }}</button>
       </form>
     </article>
 
     <template v-if="selectedCycle && forecast">
       <article class="panel cycle-details">
         <div class="panel-title">
-          <div><h3>Calendar-cycle details</h3><span>{{ formatUkDate(selectedCycle.start_date) }} to {{ formatUkDate(inclusiveCycleEnd(selectedCycle.end_date)) }} · benefit income {{ formatUkDate(selectedCycle.next_payment_date) }}</span></div>
-          <div v-if="!editingCycle" class="row-actions"><button class="text-button" @click="startCycleEdit">Edit cycle</button><button class="text-button danger" @click="removeCycle">Delete cycle</button></div>
+          <div><h3>{{ t("plan.cycleDetails") }}</h3><span>{{ t("plan.cycleDates", { start: formatUkDate(selectedCycle.start_date), end: formatUkDate(inclusiveCycleEnd(selectedCycle.end_date)), payment: formatUkDate(selectedCycle.next_payment_date) }) }}</span></div>
+          <div v-if="!editingCycle" class="row-actions"><button class="text-button" @click="startCycleEdit">{{ t("plan.editCycle") }}</button><button class="text-button danger" @click="removeCycle">{{ t("plan.deleteCycle") }}</button></div>
         </div>
         <form v-if="editingCycle" class="cycle-setup-form" @submit.prevent="saveCycle">
-          <label class="field"><span>Name</span><input v-model="cycleEditForm.name" /></label>
-          <label class="field"><span>Benefit payment date</span><input v-model="cycleEditForm.nextPaymentDate" type="date" required /></label>
-          <label class="field"><span>Expected income</span><input v-model="cycleEditForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
-          <label class="field"><span>Opening balance</span><input v-model="cycleEditForm.openingBalance" type="number" step="0.01" required /></label>
-          <label class="field"><span>Current usable balance</span><input v-model="cycleEditForm.currentBalance" type="number" step="0.01" /></label>
-          <label class="field"><span>Currency</span><input v-model="cycleEditForm.currency" minlength="3" maxlength="3" required /></label>
-          <label class="field"><span>Status</span><select v-model="cycleEditForm.status"><option value="planned">Planned</option><option value="active">Active</option><option value="closed">Closed</option></select></label>
-          <div class="form-actions"><button class="primary-button" :disabled="saving">Save cycle</button><button class="secondary-button" type="button" @click="editingCycle = false">Cancel</button></div>
+          <label class="field"><span>{{ t("common.name") }}</span><input v-model="cycleEditForm.name" /></label>
+          <label class="field"><span>{{ t("plan.benefitDate") }}</span><input v-model="cycleEditForm.nextPaymentDate" type="date" required /></label>
+          <label class="field"><span>{{ t("plan.expectedIncome") }}</span><input v-model="cycleEditForm.expectedIncome" type="number" min="0" step="0.01" required /></label>
+          <label class="field"><span>{{ t("plan.openingBalance") }}</span><input v-model="cycleEditForm.openingBalance" type="number" step="0.01" required /></label>
+          <label class="field"><span>{{ t("plan.usableBalance") }}</span><input v-model="cycleEditForm.currentBalance" type="number" step="0.01" /></label>
+          <label class="field"><span>{{ t("common.currency") }}</span><input v-model="cycleEditForm.currency" minlength="3" maxlength="3" required /></label>
+          <label class="field"><span>{{ t("common.status") }}</span><select v-model="cycleEditForm.status"><option value="planned">{{ t("common.statuses.planned") }}</option><option value="active">{{ t("common.statuses.active") }}</option><option value="closed">{{ t("common.statuses.closed") }}</option></select></label>
+          <div class="form-actions"><button class="primary-button" :disabled="saving">{{ t("plan.saveCycle") }}</button><button class="secondary-button" type="button" @click="editingCycle = false">{{ t("common.cancel") }}</button></div>
         </form>
       </article>
 
       <article class="panel balance-panel">
-        <div><strong>Keep the forecast current</strong><span>The calculation uses your {{ forecast.balance_source }} balance.</span></div>
+        <div><strong>{{ t("plan.forecastTitle") }}</strong><span>{{ t("plan.forecastSource", { source: balanceSourceLabel(forecast.balance_source) }) }}</span></div>
         <form class="inline-filter" @submit.prevent="updateBalance">
-          <label class="field"><span>Usable balance</span><input v-model="balanceInput" type="number" step="0.01" required /></label>
-          <button class="secondary-button" :disabled="saving">Update</button>
+          <label class="field"><span>{{ t("plan.usableBalance") }}</span><input v-model="balanceInput" type="number" step="0.01" required /></label>
+          <button class="secondary-button" :disabled="saving">{{ t("common.update") }}</button>
         </form>
       </article>
 
       <div class="plan-grid">
         <article class="panel">
-          <div class="panel-title"><h3>Bills due before payment</h3><span>{{ pendingCommitments.length }} pending</span></div>
-          <div v-if="!commitments.length" class="table-empty">No commitments recorded.</div>
+          <div class="panel-title"><h3>{{ t("plan.billsTitle") }}</h3><span>{{ t("plan.pendingCount", { count: pendingCommitments.length }) }}</span></div>
+          <div v-if="!commitments.length" class="table-empty">{{ t("plan.noBills") }}</div>
           <div v-else class="plan-list">
             <div v-for="item in commitments" :key="item.id" class="plan-row-wrap">
               <form v-if="editingCommitmentId === item.id" class="plan-edit-form" @submit.prevent="saveCommitment(item)">
-                <label class="field"><span>Bill</span><input v-model="commitmentEditForm.name" required /></label>
-                <label class="field"><span>Amount</span><input v-model="commitmentEditForm.amount" type="number" min="0" step="0.01" required /></label>
-                <label class="field"><span>Due</span><input v-model="commitmentEditForm.dueDate" type="date" required /></label>
-                <label class="field"><span>Priority</span><select v-model="commitmentEditForm.priority"><option value="protected">Protected</option><option value="essential">Essential</option><option value="adjustable">Adjustable</option><option value="optional">Optional</option></select></label>
-                <label class="field"><span>Status</span><select v-model="commitmentEditForm.status"><option value="pending">Pending</option><option value="paid">Paid</option><option value="skipped">Skipped</option></select></label>
-                <label class="field"><span>Recurrence</span><input v-model="commitmentEditForm.recurrence" placeholder="e.g. monthly" /></label>
-                <label class="field"><span>Category</span><select v-model="commitmentEditForm.categoryId"><option value="">None</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
-                <div class="form-actions"><button class="primary-button" :disabled="saving">Save</button><button class="secondary-button" type="button" @click="editingCommitmentId = null">Cancel</button></div>
+                <label class="field"><span>{{ t("plan.bill") }}</span><input v-model="commitmentEditForm.name" required /></label>
+                <label class="field"><span>{{ t("common.amount") }}</span><input v-model="commitmentEditForm.amount" type="number" min="0" step="0.01" required /></label>
+                <label class="field"><span>{{ t("plan.due") }}</span><input v-model="commitmentEditForm.dueDate" type="date" required /></label>
+                <label class="field"><span>{{ t("common.priority") }}</span><select v-model="commitmentEditForm.priority"><option value="protected">{{ t("common.priorities.protected") }}</option><option value="essential">{{ t("common.priorities.essential") }}</option><option value="adjustable">{{ t("common.priorities.adjustable") }}</option><option value="optional">{{ t("common.priorities.optional") }}</option></select></label>
+                <label class="field"><span>{{ t("common.status") }}</span><select v-model="commitmentEditForm.status"><option value="pending">{{ t("common.statuses.pending") }}</option><option value="paid">{{ t("common.statuses.paid") }}</option><option value="skipped">{{ t("common.statuses.skipped") }}</option></select></label>
+                <label class="field"><span>{{ t("plan.recurrence") }}</span><input v-model="commitmentEditForm.recurrence" :placeholder="t('plan.recurrencePlaceholder')" /></label>
+                <label class="field"><span>{{ t("common.category") }}</span><select v-model="commitmentEditForm.categoryId"><option value="">{{ t("common.none") }}</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ formatCategoryName(category) }}</option></select></label>
+                <div class="form-actions"><button class="primary-button" :disabled="saving">{{ t("common.save") }}</button><button class="secondary-button" type="button" @click="editingCommitmentId = null">{{ t("common.cancel") }}</button></div>
               </form>
               <div v-else class="plan-row">
-                <div><strong>{{ item.name }}</strong><span>{{ formatUkDate(item.due_date) }} · {{ priorityLabel(item.priority) }} · {{ item.status }}</span><span>Uses benefit/income available from {{ formatUkDate(item.funding_payment_date) }}</span></div>
+                <div><strong>{{ item.name }}</strong><span>{{ formatUkDate(item.due_date) }} · {{ priorityLabel(item.priority) }} · {{ statusLabel(item.status) }}</span><span>{{ t("plan.fundedFrom", { date: formatUkDate(item.funding_payment_date) }) }}</span></div>
                 <strong>{{ formatMoney(item.amount, item.currency) }}</strong>
-                <div class="row-actions"><button class="text-button" @click="startCommitmentEdit(item)">Edit</button><button class="text-button danger" aria-label="Delete bill" @click="removeCommitment(item.id)">Remove</button></div>
+                <div class="row-actions"><button class="text-button" @click="startCommitmentEdit(item)">{{ t("common.edit") }}</button><button class="text-button danger" :aria-label="t('plan.deleteBill')" @click="removeCommitment(item.id)">{{ t("common.remove") }}</button></div>
               </div>
             </div>
           </div>
           <form class="plan-form" @submit.prevent="addCommitment">
-            <label class="field"><span>Bill</span><input v-model="commitmentForm.name" required /></label>
-            <label class="field"><span>Amount</span><input v-model="commitmentForm.amount" type="number" min="0" step="0.01" required /></label>
-            <label class="field"><span>Due</span><input v-model="commitmentForm.dueDate" type="date" required /></label>
-            <label class="field"><span>Priority</span><select v-model="commitmentForm.priority"><option value="protected">Protected</option><option value="essential">Essential</option><option value="adjustable">Adjustable</option><option value="optional">Optional</option></select></label>
-            <label class="field"><span>Category</span><select v-model="commitmentForm.categoryId"><option value="">None</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
-            <button class="primary-button" :disabled="saving">Add bill</button>
+            <label class="field"><span>{{ t("plan.bill") }}</span><input v-model="commitmentForm.name" required /></label>
+            <label class="field"><span>{{ t("common.amount") }}</span><input v-model="commitmentForm.amount" type="number" min="0" step="0.01" required /></label>
+            <label class="field"><span>{{ t("plan.due") }}</span><input v-model="commitmentForm.dueDate" type="date" required /></label>
+            <label class="field"><span>{{ t("common.priority") }}</span><select v-model="commitmentForm.priority"><option value="protected">{{ t("common.priorities.protected") }}</option><option value="essential">{{ t("common.priorities.essential") }}</option><option value="adjustable">{{ t("common.priorities.adjustable") }}</option><option value="optional">{{ t("common.priorities.optional") }}</option></select></label>
+            <label class="field"><span>{{ t("common.category") }}</span><select v-model="commitmentForm.categoryId"><option value="">{{ t("common.none") }}</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ formatCategoryName(category) }}</option></select></label>
+            <button class="primary-button" :disabled="saving">{{ t("plan.addBill") }}</button>
           </form>
         </article>
 
         <article class="panel">
-          <div class="panel-title"><h3>Allowances and reserves</h3><span>{{ allowances.length }} planned</span></div>
-          <div v-if="!allowances.length" class="table-empty">No essential allowances recorded.</div>
+          <div class="panel-title"><h3>{{ t("plan.allowancesTitle") }}</h3><span>{{ t("plan.plannedCount", { count: allowances.length }) }}</span></div>
+          <div v-if="!allowances.length" class="table-empty">{{ t("plan.noAllowances") }}</div>
           <div v-else class="plan-list">
             <div v-for="item in allowances" :key="item.id" class="allowance-row">
               <form v-if="editingAllowanceId === item.id" class="plan-edit-form" @submit.prevent="saveAllowance(item)">
-                <label class="field"><span>Allowance</span><input v-model="allowanceEditForm.name" required /></label>
-                <label class="field"><span>Amount</span><input v-model="allowanceEditForm.amount" type="number" min="0" step="0.01" required /></label>
-                <label class="field"><span>Type</span><select v-model="allowanceEditForm.allowanceType"><option value="food">Food</option><option value="transport">Transport</option><option value="irregular_cost">Irregular cost</option><option value="emergency">Emergency</option><option value="custom">Custom</option></select></label>
-                <label class="field"><span>Priority</span><select v-model="allowanceEditForm.priority"><option value="protected">Protected</option><option value="essential">Essential</option><option value="adjustable">Adjustable</option><option value="irregular_essential">Irregular essential</option><option value="optional">Optional</option></select></label>
-                <label class="field"><span>Category</span><select v-model="allowanceEditForm.categoryId"><option value="">Reserve only</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
-                <div class="form-actions"><button class="primary-button" :disabled="saving">Save</button><button class="secondary-button" type="button" @click="editingAllowanceId = null">Cancel</button></div>
+                <label class="field"><span>{{ t("plan.allowance") }}</span><input v-model="allowanceEditForm.name" required /></label>
+                <label class="field"><span>{{ t("common.amount") }}</span><input v-model="allowanceEditForm.amount" type="number" min="0" step="0.01" required /></label>
+                <label class="field"><span>{{ t("plan.type") }}</span><select v-model="allowanceEditForm.allowanceType"><option value="food">{{ t("common.allowanceTypes.food") }}</option><option value="transport">{{ t("common.allowanceTypes.transport") }}</option><option value="irregular_cost">{{ t("common.allowanceTypes.irregular_cost") }}</option><option value="emergency">{{ t("common.allowanceTypes.emergency") }}</option><option value="custom">{{ t("common.allowanceTypes.custom") }}</option></select></label>
+                <label class="field"><span>{{ t("common.priority") }}</span><select v-model="allowanceEditForm.priority"><option value="protected">{{ t("common.priorities.protected") }}</option><option value="essential">{{ t("common.priorities.essential") }}</option><option value="adjustable">{{ t("common.priorities.adjustable") }}</option><option value="irregular_essential">{{ t("common.priorities.irregular_essential") }}</option><option value="optional">{{ t("common.priorities.optional") }}</option></select></label>
+                <label class="field"><span>{{ t("common.category") }}</span><select v-model="allowanceEditForm.categoryId"><option value="">{{ t("plan.reserveOnly") }}</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ formatCategoryName(category) }}</option></select></label>
+                <div class="form-actions"><button class="primary-button" :disabled="saving">{{ t("common.save") }}</button><button class="secondary-button" type="button" @click="editingAllowanceId = null">{{ t("common.cancel") }}</button></div>
               </form>
               <template v-else>
-                <div class="allowance-heading"><div><strong>{{ item.name }}</strong><span>{{ item.allowance_type.replace("_", " ") }} · {{ priorityLabel(item.priority) }}</span></div><strong>{{ formatMoney(item.amount, forecast.currency) }}</strong></div>
+                <div class="allowance-heading"><div><strong>{{ item.name }}</strong><span>{{ allowanceTypeLabel(item.allowance_type) }} · {{ priorityLabel(item.priority) }}</span></div><strong>{{ formatMoney(item.amount, forecast.currency) }}</strong></div>
                 <template v-if="allowanceForecast(item.id)">
                   <div class="allowance-track"><span :style="{ width: `${Math.min(100, item.amount ? (allowanceForecast(item.id)?.spent_amount ?? 0) / item.amount * 100 : 0)}%` }"></span></div>
-                  <div class="allowance-foot"><span>{{ formatMoney(allowanceForecast(item.id)?.spent_amount ?? 0, forecast.currency) }} spent · {{ formatMoney(allowanceForecast(item.id)?.remaining_amount ?? item.amount, forecast.currency) }} left</span><div class="row-actions"><button class="text-button" @click="startAllowanceEdit(item)">Edit</button><button class="text-button danger" @click="removeAllowance(item.id)">Remove</button></div></div>
+                  <div class="allowance-foot"><span>{{ t("plan.spentLeft", { spent: formatMoney(allowanceForecast(item.id)?.spent_amount ?? 0, forecast.currency), left: formatMoney(allowanceForecast(item.id)?.remaining_amount ?? item.amount, forecast.currency) }) }}</span><div class="row-actions"><button class="text-button" @click="startAllowanceEdit(item)">{{ t("common.edit") }}</button><button class="text-button danger" @click="removeAllowance(item.id)">{{ t("common.remove") }}</button></div></div>
                 </template>
-                <div v-else class="allowance-foot"><span>{{ item.category_id ? "Linked to a spending category" : "Reserve only" }}</span><div class="row-actions"><button class="text-button" @click="startAllowanceEdit(item)">Edit</button><button class="text-button danger" @click="removeAllowance(item.id)">Remove</button></div></div>
+                <div v-else class="allowance-foot"><span>{{ item.category_id ? t("plan.linkedCategory") : t("plan.reserveOnly") }}</span><div class="row-actions"><button class="text-button" @click="startAllowanceEdit(item)">{{ t("common.edit") }}</button><button class="text-button danger" @click="removeAllowance(item.id)">{{ t("common.remove") }}</button></div></div>
               </template>
             </div>
           </div>
           <form class="plan-form" @submit.prevent="addAllowance">
-            <label class="field"><span>Allowance</span><input v-model="allowanceForm.name" required /></label>
-            <label class="field"><span>Amount</span><input v-model="allowanceForm.amount" type="number" min="0" step="0.01" required /></label>
-            <label class="field"><span>Type</span><select v-model="allowanceForm.allowanceType"><option value="food">Food</option><option value="transport">Transport</option><option value="irregular_cost">Irregular cost</option><option value="emergency">Emergency</option><option value="custom">Custom</option></select></label>
-            <label class="field"><span>Priority</span><select v-model="allowanceForm.priority"><option value="protected">Protected</option><option value="essential">Essential</option><option value="adjustable">Adjustable</option><option value="irregular_essential">Irregular essential</option><option value="optional">Optional</option></select></label>
-            <label class="field"><span>Category</span><select v-model="allowanceForm.categoryId"><option value="">Reserve only</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option></select></label>
-            <button class="primary-button" :disabled="saving">Add allowance</button>
+            <label class="field"><span>{{ t("plan.allowance") }}</span><input v-model="allowanceForm.name" required /></label>
+            <label class="field"><span>{{ t("common.amount") }}</span><input v-model="allowanceForm.amount" type="number" min="0" step="0.01" required /></label>
+            <label class="field"><span>{{ t("plan.type") }}</span><select v-model="allowanceForm.allowanceType"><option value="food">{{ t("common.allowanceTypes.food") }}</option><option value="transport">{{ t("common.allowanceTypes.transport") }}</option><option value="irregular_cost">{{ t("common.allowanceTypes.irregular_cost") }}</option><option value="emergency">{{ t("common.allowanceTypes.emergency") }}</option><option value="custom">{{ t("common.allowanceTypes.custom") }}</option></select></label>
+            <label class="field"><span>{{ t("common.priority") }}</span><select v-model="allowanceForm.priority"><option value="protected">{{ t("common.priorities.protected") }}</option><option value="essential">{{ t("common.priorities.essential") }}</option><option value="adjustable">{{ t("common.priorities.adjustable") }}</option><option value="irregular_essential">{{ t("common.priorities.irregular_essential") }}</option><option value="optional">{{ t("common.priorities.optional") }}</option></select></label>
+            <label class="field"><span>{{ t("common.category") }}</span><select v-model="allowanceForm.categoryId"><option value="">{{ t("plan.reserveOnly") }}</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ formatCategoryName(category) }}</option></select></label>
+            <button class="primary-button" :disabled="saving">{{ t("plan.addAllowance") }}</button>
           </form>
         </article>
       </div>

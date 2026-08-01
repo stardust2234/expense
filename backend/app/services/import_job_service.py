@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 from app.database.session import SessionLocal
 from app.models import ImportBatch
 from app.services.commitment_reconciliation import reconcile_pending_commitments
-from app.services.import_batch_service import batch_counts, get_import_batch
+from app.services.import_batch_service import (
+    batch_counts,
+    get_import_batch,
+)
 from app.services.transaction_processor import (
     categorise_normalised_transactions,
     normalise_pending_transactions,
@@ -18,7 +21,6 @@ from app.services.transaction_processor import (
 
 logger = logging.getLogger(__name__)
 SessionFactory = Callable[[], Session]
-ACTIVE_IMPORT_STATUSES = {"queued", "processing"}
 IMPORT_JOB_LEASE = timedelta(minutes=15)
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="import-worker")
 
@@ -87,7 +89,7 @@ def process_import_batch(
     """Run a tracked import job using a session independent from the request."""
     with session_factory() as session:
         claim_token = str(uuid4())
-        claimed = session.execute(
+        claimed_row = session.execute(
             update(ImportBatch)
             .where(
                 ImportBatch.id == batch_id,
@@ -102,11 +104,14 @@ def process_import_batch(
                 processing_claim_token=claim_token,
                 processing_lease_expires_at=datetime.now(UTC) + IMPORT_JOB_LEASE,
             )
-        ).rowcount
+            .returning(ImportBatch.id, ImportBatch.workspace_id)
+        ).one_or_none()
         session.commit()
-        if claimed != 1:
+        if claimed_row is None:
             logger.info("Import batch %s was already claimed or is not queued", batch_id)
             return
+        if claimed_row.workspace_id is not None:
+            session.info["workspace_id"] = claimed_row.workspace_id
         batch = session.scalar(
             select(ImportBatch).where(
                 ImportBatch.id == batch_id,

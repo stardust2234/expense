@@ -6,6 +6,11 @@ DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.yml}"
 CADDY_HTTP_PORT="${CADDY_HTTP_PORT:-18080}"
 export CADDY_HTTP_PORT
+export AUTH_THROTTLE_SECRET="${AUTH_THROTTLE_SECRET:-smoke-test-auth-throttle-secret-at-least-32-characters}"
+export PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://localhost}"
+export MAIL_FROM="${MAIL_FROM:-noreply@localhost}"
+export CADDY_SITE_ADDRESS="${CADDY_SITE_ADDRESS:-localhost}"
+export ALLOW_REGISTRATION="${ALLOW_REGISTRATION:-false}"
 
 cleanup() {
   ${DOCKER_COMPOSE} -f "${COMPOSE_FILE}" down >/dev/null 2>&1 || true
@@ -33,3 +38,4 @@ done
 curl -i -H 'Host: localhost' "http://127.0.0.1:${CADDY_HTTP_PORT}/api/health" >&2 || true
 ${DOCKER_COMPOSE} -f "${COMPOSE_FILE}" logs >&2
 exit 1
+

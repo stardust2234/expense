@@ -26,6 +26,7 @@ async def get_categories(session: DatabaseSession) -> CategoryListResponse:
         items=[
             CategoryItem(
                 id=category.id,
+                code=category.code,
                 name=category.name,
                 parent_category_id=category.parent_category_id,
                 default_priority=category.default_priority,

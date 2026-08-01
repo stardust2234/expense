@@ -2,10 +2,16 @@ const zeroDecimalCurrencies = new Set(["JPY", "KRW"]);
 const threeDecimalCurrencies = new Set(["BHD", "KWD", "OMR", "TND"]);
 
 export function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-GB", {
+  return new Intl.NumberFormat(localeTag(), {
     style: "currency",
     currency,
   }).format(toMajorUnits(amount, currency));
+}
+
+function localeTag(): string {
+  return ({ en: "en-GB", fr: "fr-FR" } satisfies Record<AppLocale, string>)[
+    i18n.global.locale.value
+  ];
 }
 
 export function toMajorUnits(amount: number, currency: string): number {
@@ -24,4 +30,6 @@ function currencyExponent(currency: string): number {
       ? 3
       : 2;
 }
+import { i18n, type AppLocale } from "../i18n";
+
 

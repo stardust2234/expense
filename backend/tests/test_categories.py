@@ -57,18 +57,21 @@ async def test_categories_are_flat_sorted_and_include_parent_ids(session: Sessio
         "items": [
             {
                 "id": food.id,
+                "code": None,
                 "name": "Food",
                 "parent_category_id": None,
                 "default_priority": "adjustable",
             },
             {
                 "id": restaurants.id,
+                "code": None,
                 "name": "restaurants",
                 "parent_category_id": food.id,
                 "default_priority": "adjustable",
             },
             {
                 "id": travel.id,
+                "code": None,
                 "name": "Travel",
                 "parent_category_id": None,
                 "default_priority": "adjustable",

@@ -7,6 +7,7 @@ from app.models import OpportunityDecision, OpportunityDifficulty
 
 class CategoryTotal(BaseModel):
     category_id: int
+    category_code: str | None
     category_name: str
     currency: str
     total_amount: int

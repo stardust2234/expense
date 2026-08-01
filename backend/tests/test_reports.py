@@ -126,6 +126,7 @@ async def test_category_and_monthly_reports(session: Session) -> None:
     assert category_response.json()["items"] == [
         {
             "category_id": groceries.id,
+            "category_code": None,
             "category_name": "Groceries",
             "currency": "GBP",
             "total_amount": 3500,
@@ -133,6 +134,7 @@ async def test_category_and_monthly_reports(session: Session) -> None:
         },
         {
             "category_id": travel.id,
+            "category_code": None,
             "category_name": "Travel",
             "currency": "GBP",
             "total_amount": 5000,
@@ -288,6 +290,7 @@ async def test_cash_flow_excludes_transfers_and_nets_refunds_and_income(
     assert categories.json()["items"] == [
         {
             "category_id": rent.id,
+            "category_code": None,
             "category_name": "Rent",
             "currency": "GBP",
             "total_amount": 9_000,

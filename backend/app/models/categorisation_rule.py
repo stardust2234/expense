@@ -6,13 +6,14 @@ from sqlalchemy import Boolean, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 if TYPE_CHECKING:
     from app.models.category import Category
     from app.models.expense import Expense
 
 
-class CategorisationRule(Base):
+class CategorisationRule(WorkspaceOwned, Base):
     __tablename__ = "categorisation_rules"
 
     id: Mapped[int] = mapped_column(primary_key=True)

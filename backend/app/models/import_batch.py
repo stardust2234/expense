@@ -7,13 +7,14 @@ from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from app.models.workspace_owned import WorkspaceOwned
 
 if TYPE_CHECKING:
     from app.models.expense import Expense
     from app.models.raw_transaction import RawTransaction
 
 
-class ImportBatch(Base):
+class ImportBatch(WorkspaceOwned, Base):
     __tablename__ = "import_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True)

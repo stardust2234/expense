@@ -12,6 +12,7 @@ from app.services.cash_flow import spending_contribution
 @dataclass(frozen=True)
 class CategoryTotalRecord:
     category_id: int
+    category_code: str | None
     category_name: str
     currency: str
     total_amount: int
@@ -63,7 +64,7 @@ def get_category_totals(
     currency: str | None = None,
 ) -> list[CategoryTotalRecord]:
     validate_date_range(date_from, date_to)
-    totals: defaultdict[tuple[int, str, str], list[int]] = defaultdict(lambda: [0, 0])
+    totals: defaultdict[tuple[int, str | None, str, str], list[int]] = defaultdict(lambda: [0, 0])
     for expense in report_expenses(
         session, date_from=date_from, date_to=date_to, currency=currency
     ):
@@ -72,13 +73,15 @@ def get_category_totals(
         contribution = spending_contribution(expense.amount, expense.category)
         if contribution is None:
             continue
-        bucket = totals[(expense.category.id, expense.category.name, expense.currency)]
+        bucket = totals[
+            (expense.category.id, expense.category.code, expense.category.name, expense.currency)
+        ]
         bucket[0] += contribution
         bucket[1] += 1
     return [
-        CategoryTotalRecord(category_id, name, row_currency, values[0], values[1])
-        for (category_id, name, row_currency), values in sorted(
-            totals.items(), key=lambda item: (item[0][2], item[0][1].casefold(), item[0][0])
+        CategoryTotalRecord(category_id, code, name, row_currency, values[0], values[1])
+        for (category_id, code, name, row_currency), values in sorted(
+            totals.items(), key=lambda item: (item[0][3], item[0][2].casefold(), item[0][0])
         )
     ]
 

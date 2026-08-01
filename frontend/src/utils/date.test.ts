@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { setAppLocale } from "../i18n";
 
 import {
   formatUkDate,
@@ -8,6 +10,7 @@ import {
 } from "./date";
 
 describe("UK date formatting", () => {
+  afterEach(() => setAppLocale("en"));
   it("formats stored ISO dates and months without timezone conversion", () => {
     expect(formatUkDate("2026-07-25")).toBe("25/07/2026");
     expect(formatUkMonth("2026-07")).toBe("07/2026");
@@ -21,6 +24,11 @@ describe("UK date formatting", () => {
   it("formats timestamps in the Europe/London timezone", () => {
     expect(formatUkDateTime("2026-07-25T12:30:00Z")).toBe("25/07/2026, 13:30");
     expect(formatUkDateTime("not-a-date")).toBe("not-a-date");
+  });
+
+  it("formats timestamps using French punctuation", () => {
+    setAppLocale("fr");
+    expect(formatUkDateTime("2026-07-25T12:30:00Z")).toBe("25/07/2026 13:30");
   });
 
   it("converts an exclusive cycle boundary to its inclusive calendar end", () => {

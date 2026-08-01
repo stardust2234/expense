@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
 import { api } from "../api/client";
 import PlotlyChart from "../components/PlotlyChart.vue";
@@ -12,8 +13,11 @@ import type {
 } from "../types/api";
 import { formatUkDate, formatUkMonth, inclusiveCycleEnd } from "../utils/date";
 import { formatMoney, toMajorUnits, toMinorUnits } from "../utils/money";
+import { formatCategoryName } from "../utils/category";
+import { categoryChart, monthlyChart, paymentPeriodChart, reportChartLayout } from "./reports/charts";
 
 const categoryTotals = ref<CategoryTotal[]>([]);
+const { t } = useI18n();
 const monthlyTotals = ref<MonthlyTotal[]>([]);
 const recurring = ref<RecurringExpense[]>([]);
 const paymentPeriods = ref<PaymentPeriod[]>([]);
@@ -37,64 +41,10 @@ const reportParams = computed(() => {
   return params;
 });
 
-const categoryChartData = computed(() => [{
-  type: "bar",
-  orientation: "h",
-  x: categoryTotals.value.map((item) => toMajorUnits(item.total_amount, item.currency)),
-  y: categoryTotals.value.map((item) => `${item.category_name} · ${item.currency}`),
-  text: categoryTotals.value.map((item) => formatMoney(item.total_amount, item.currency)),
-  hovertemplate: "%{y}<br>%{text}<extra></extra>",
-  marker: { color: "#5f83ad", borderRadius: 4 },
-}]);
-
-const monthlyChartData = computed(() => {
-  const currencies = [...new Set(monthlyTotals.value.map((item) => item.currency))];
-  return currencies.map((rowCurrency) => ({
-    type: "scatter",
-    mode: "lines+markers",
-    name: rowCurrency,
-    x: monthlyTotals.value.filter((item) => item.currency === rowCurrency).map((item) => item.month),
-    y: monthlyTotals.value.filter((item) => item.currency === rowCurrency).map((item) => toMajorUnits(item.total_amount, item.currency)),
-    line: { width: 3 },
-    marker: { size: 7 },
-    hovertemplate: `%{x}<br>%{y:.2f} ${rowCurrency}<extra></extra>`,
-  }));
-});
-
-const paymentPeriodChartData = computed(() => {
-  const definitions = [
-    ["Protected", "protected_spending", "#8f5146"],
-    ["Essential", "essential_spending", "#4f806b"],
-    ["Adjustable", "adjustable_spending", "#5f83ad"],
-    ["Optional", "optional_spending", "#b58a45"],
-    ["Irregular essential", "irregular_essential_spending", "#8873a9"],
-  ] as const;
-  return definitions.map(([name, field, color]) => ({
-    type: "bar",
-    name,
-    x: paymentPeriods.value.map((period) =>
-      `${formatUkDate(period.start_date)}–${formatUkDate(inclusiveCycleEnd(period.end_date))}`,
-    ),
-    y: paymentPeriods.value.map((period) =>
-      toMajorUnits(period[field], period.currency),
-    ),
-    marker: { color },
-    hovertemplate: `%{x}<br>%{y:.2f}<extra>${name}</extra>`,
-  }));
-});
-
-const chartLayout = {
-  autosize: true,
-  height: 330,
-  margin: { l: 115, r: 24, t: 18, b: 45 },
-  paper_bgcolor: "transparent",
-  plot_bgcolor: "transparent",
-  font: { family: "Inter, sans-serif", color: "#596273", size: 11 },
-  xaxis: { gridcolor: "#ebe9e3", zeroline: false },
-  yaxis: { gridcolor: "#ebe9e3", zeroline: false, automargin: true },
-  showlegend: true,
-  legend: { orientation: "h", y: 1.1 },
-};
+const categoryChartData = computed(() => categoryChart(categoryTotals.value));
+const monthlyChartData = computed(() => monthlyChart(monthlyTotals.value));
+const paymentPeriodChartData = computed(() => paymentPeriodChart(paymentPeriods.value, t));
+const chartLayout = reportChartLayout;
 
 async function loadReports() {
   loading.value = true;
@@ -125,7 +75,7 @@ async function loadReports() {
       ]),
     );
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not load reports";
+    error.value = caught instanceof Error ? caught.message : t("views.reports.errors.load");
   } finally {
     loading.value = false;
   }
@@ -157,19 +107,19 @@ async function saveOpportunity(item: RecurringOpportunity) {
     });
     await loadReports();
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not save opportunity";
+    error.value = caught instanceof Error ? caught.message : t("views.reports.errors.save");
   }
 }
 
 async function resetOpportunity(item: RecurringOpportunity) {
   if (item.opportunity_id === null) return;
-  if (!window.confirm(`Reset the saved assessment for ${item.description}?`)) return;
+  if (!window.confirm(t("importDetail.resetConfirm", { description: item.description }))) return;
   error.value = "";
   try {
     await api.deleteRecurringOpportunity(item.opportunity_id);
     await loadReports();
   } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "Could not reset opportunity";
+    error.value = caught instanceof Error ? caught.message : t("views.reports.errors.reset");
   }
 }
 
@@ -180,43 +130,37 @@ onMounted(loadReports);
   <section class="view-stack">
     <header class="view-heading">
       <div>
-        <p class="eyebrow">Understand the pattern</p>
-        <h2>Reports</h2>
-        <p>Net spending excludes Income and Transfers. Refunds reduce spending, and currencies remain separate.</p>
+        <p class="eyebrow">{{ t("views.reports.eyebrow") }}</p><h2>{{ t("views.reports.title") }}</h2><p>{{ t("views.reports.subtitle") }}</p>
       </div>
     </header>
 
     <form class="panel filter-bar" @submit.prevent="loadReports">
-      <label class="field"><span>From</span><input v-model="dateFrom" type="date" /></label>
-      <label class="field"><span>To</span><input v-model="dateTo" type="date" /></label>
-      <label class="field compact-field"><span>Currency</span><input v-model="currency" maxlength="3" placeholder="All" /></label>
-      <button class="secondary-button" type="submit">Refresh report</button>
+      <label class="field"><span>{{ t("views.reports.from") }}</span><input v-model="dateFrom" type="date" /></label><label class="field"><span>{{ t("views.reports.to") }}</span><input v-model="dateTo" type="date" /></label><label class="field compact-field"><span>{{ t("common.currency") }}</span><input v-model="currency" maxlength="3" :placeholder="t('views.reports.all')" /></label><button class="secondary-button" type="submit">{{ t("views.reports.refresh") }}</button>
     </form>
 
     <p v-if="error" class="message error-message">{{ error }}</p>
-    <div v-if="loading" class="panel empty-state">Calculating totals…</div>
+    <div v-if="loading" class="panel empty-state">{{ t("views.reports.loading") }}</div>
     <div v-else class="report-grid chart-grid">
       <article class="panel report-panel">
-        <div class="panel-title"><h3>Category distribution</h3><span>Interactive</span></div>
+        <div class="panel-title"><h3>{{ t("views.reports.categoryDistribution") }}</h3><span>{{ t("views.reports.interactive") }}</span></div>
         <PlotlyChart v-if="categoryTotals.length" :data="categoryChartData" :layout="{ ...chartLayout, showlegend: false }" />
-        <div v-else class="table-empty">No category data to plot.</div>
+        <div v-else class="table-empty">{{ t("views.reports.noCategoryPlot") }}</div>
       </article>
       <article class="panel report-panel">
-        <div class="panel-title"><h3>Monthly trend</h3><span>Interactive</span></div>
+        <div class="panel-title"><h3>{{ t("views.reports.monthlyTrend") }}</h3><span>{{ t("views.reports.interactive") }}</span></div>
         <PlotlyChart v-if="monthlyTotals.length" :data="monthlyChartData" :layout="chartLayout" />
-        <div v-else class="table-empty">No monthly data to plot.</div>
+        <div v-else class="table-empty">{{ t("views.reports.noMonthlyPlot") }}</div>
       </article>
     </div>
     <div v-if="!loading" class="report-grid">
       <article class="panel report-panel">
-        <div class="panel-title"><h3>By category</h3><span>{{ categoryTotals.length }} totals</span></div>
-        <div v-if="!categoryTotals.length" class="table-empty">No categorised transactions yet.</div>
+        <div class="panel-title"><h3>{{ t("views.reports.byCategory") }}</h3><span>{{ t("views.reports.totals", { count: categoryTotals.length }) }}</span></div><div v-if="!categoryTotals.length" class="table-empty">{{ t("views.reports.noCategories") }}</div>
         <div v-else class="table-wrap">
           <table>
-            <thead><tr><th>Category</th><th>Transactions</th><th>Total</th></tr></thead>
+            <thead><tr><th>{{ t("common.category") }}</th><th>{{ t("views.reports.transactions") }}</th><th>{{ t("views.reports.total") }}</th></tr></thead>
             <tbody>
               <tr v-for="row in categoryTotals" :key="`${row.category_id}-${row.currency}`">
-                <td>{{ row.category_name }}</td>
+                <td>{{ formatCategoryName({ code: row.category_code, name: row.category_name }) }}</td>
                 <td>{{ row.transaction_count }}</td>
                 <td class="numeric">{{ formatMoney(row.total_amount, row.currency) }}</td>
               </tr>
@@ -226,11 +170,10 @@ onMounted(loadReports);
       </article>
 
       <article class="panel report-panel">
-        <div class="panel-title"><h3>By month</h3><span>{{ monthlyTotals.length }} periods</span></div>
-        <div v-if="!monthlyTotals.length" class="table-empty">No monthly totals yet.</div>
+        <div class="panel-title"><h3>{{ t("views.reports.byMonth") }}</h3><span>{{ t("views.reports.periods", { count: monthlyTotals.length }) }}</span></div><div v-if="!monthlyTotals.length" class="table-empty">{{ t("views.reports.noMonths") }}</div>
         <div v-else class="table-wrap">
           <table>
-            <thead><tr><th>Month</th><th>Transactions</th><th>Total</th></tr></thead>
+            <thead><tr><th>{{ t("views.reports.month") }}</th><th>{{ t("views.reports.transactions") }}</th><th>{{ t("views.reports.total") }}</th></tr></thead>
             <tbody>
               <tr v-for="row in monthlyTotals" :key="`${row.month}-${row.currency}`">
                 <td>{{ formatUkMonth(row.month) }}</td>
@@ -244,19 +187,19 @@ onMounted(loadReports);
     </div>
 
     <article v-if="!loading" class="panel report-panel">
-      <div class="panel-title"><h3>Spending by payment period</h3><span>{{ paymentPeriods.length }} benefit cycles</span></div>
+      <div class="panel-title"><h3>{{ t("views.reports.paymentSpending") }}</h3><span>{{ t("views.reports.cycles", { count: paymentPeriods.length }) }}</span></div>
       <PlotlyChart
         v-if="paymentPeriods.length"
         :data="paymentPeriodChartData"
         :layout="{ ...chartLayout, barmode: 'stack', height: 360, xaxis: { ...chartLayout.xaxis, tickangle: -20 } }"
       />
-      <div v-else class="table-empty">Create payment cycles to compare benefit periods.</div>
+      <div v-else class="table-empty">{{ t("views.reports.createCycles") }}</div>
       <div v-if="paymentPeriods.length" class="table-wrap">
         <table>
-          <thead><tr><th>Payment period</th><th>Income</th><th>Spending</th><th>Optional</th><th>Net</th></tr></thead>
+          <thead><tr><th>{{ t("views.reports.paymentPeriod") }}</th><th>{{ t("views.reports.income") }}</th><th>{{ t("views.reports.spending") }}</th><th>{{ t("views.reports.optional") }}</th><th>{{ t("views.reports.net") }}</th></tr></thead>
           <tbody>
             <tr v-for="period in paymentPeriods" :key="period.payment_cycle_id">
-              <td><strong>{{ period.name || "Payment cycle" }}</strong><br><span class="muted">{{ formatUkDate(period.start_date) }}–{{ formatUkDate(inclusiveCycleEnd(period.end_date)) }}</span></td>
+              <td><strong>{{ period.name || t("common.paymentCycle") }}</strong><br><span class="muted">{{ formatUkDate(period.start_date) }}–{{ formatUkDate(inclusiveCycleEnd(period.end_date)) }}</span></td>
               <td class="numeric">{{ formatMoney(period.income, period.currency) }}</td>
               <td class="numeric">{{ formatMoney(period.spending, period.currency) }}</td>
               <td class="numeric">{{ formatMoney(period.optional_spending, period.currency) }}</td>
@@ -268,8 +211,7 @@ onMounted(loadReports);
     </article>
 
     <article v-if="!loading" class="panel report-panel">
-      <div class="panel-title"><div><h3>Recurring-cost opportunities</h3><span>Alternatives are entered by you, not guessed by the app.</span></div><span>{{ opportunities.length }} candidates</span></div>
-      <div v-if="!opportunities.length" class="table-empty">No stable recurring costs detected yet.</div>
+      <div class="panel-title"><div><h3>{{ t("views.reports.opportunities") }}</h3><span>{{ t("views.reports.opportunitiesNote") }}</span></div><span>{{ t("views.reports.candidates", { count: opportunities.length }) }}</span></div><div v-if="!opportunities.length" class="table-empty">{{ t("views.reports.noOpportunities") }}</div>
       <div v-else class="opportunity-list">
         <form
           v-for="item in opportunities"
@@ -281,35 +223,26 @@ onMounted(loadReports);
             <strong>{{ item.description }}</strong>
             <span>{{ item.cadence }} · {{ item.occurrence_count }} payments · current monthly cost {{ formatMoney(item.current_monthly_cost, item.currency) }}</span>
           </div>
-          <label class="field"><span>Alternative monthly cost</span><input v-model="opportunityDrafts[opportunityKey(item)].replacement" type="number" min="0" step="0.01" placeholder="Not researched" /></label>
-          <label class="field"><span>One-off switching cost</span><input v-model="opportunityDrafts[opportunityKey(item)].switchingCost" type="number" min="0" step="0.01" /></label>
-          <label class="field"><span>Difficulty</span><select v-model="opportunityDrafts[opportunityKey(item)].difficulty"><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
-          <label class="field"><span>Decision</span><select v-model="opportunityDrafts[opportunityKey(item)].decision"><option value="review">Review</option><option value="planned">Planned</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></label>
+          <label class="field"><span>{{ t("views.reports.alternativeCost") }}</span><input v-model="opportunityDrafts[opportunityKey(item)].replacement" type="number" min="0" step="0.01" :placeholder="t('views.reports.notResearched')" /></label><label class="field"><span>{{ t("views.reports.switchingCost") }}</span><input v-model="opportunityDrafts[opportunityKey(item)].switchingCost" type="number" min="0" step="0.01" /></label><label class="field"><span>{{ t("views.reports.difficulty") }}</span><select v-model="opportunityDrafts[opportunityKey(item)].difficulty"><option v-for="value in ['easy','moderate','hard']" :key="value" :value="value">{{ t(`views.reports.difficulties.${value}`) }}</option></select></label><label class="field"><span>{{ t("views.reports.decision") }}</span><select v-model="opportunityDrafts[opportunityKey(item)].decision"><option v-for="value in ['review','planned','accepted','rejected']" :key="value" :value="value">{{ t(`views.reports.decisions.${value}`) }}</option></select></label>
           <div class="opportunity-saving">
-            <span>Potential saving</span>
-            <strong>{{ item.monthly_saving === null ? "Not assessed" : `${formatMoney(item.monthly_saving, item.currency)}/month` }}</strong>
+            <span>{{ t("views.reports.potentialSaving") }}</span><strong>{{ item.monthly_saving === null ? t("views.reports.notAssessed") : t("views.reports.perMonth", { amount: formatMoney(item.monthly_saving, item.currency) }) }}</strong>
             <small v-if="item.first_year_saving !== null">{{ formatMoney(item.first_year_saving, item.currency) }} in year one</small>
           </div>
           <div class="row-actions">
-            <button class="secondary-button">Save assessment</button>
-            <button v-if="item.opportunity_id !== null" class="text-button danger" type="button" @click="resetOpportunity(item)">Reset</button>
+            <button class="secondary-button">{{ t("views.reports.saveAssessment") }}</button><button v-if="item.opportunity_id !== null" class="text-button danger" type="button" @click="resetOpportunity(item)">{{ t("views.reports.reset") }}</button>
           </div>
         </form>
       </div>
     </article>
 
     <article v-if="!loading" class="panel report-panel">
-      <div class="panel-title"><h3>Recurring expenses</h3><span>{{ recurring.length }} patterns</span></div>
-      <div v-if="!recurring.length" class="table-empty">No recurring patterns detected yet.</div>
-      <div v-else class="table-wrap"><table><thead><tr><th>Description</th><th>Cadence</th><th>Occurrences</th><th>Last seen</th><th>Average</th></tr></thead><tbody>
-        <tr v-for="item in recurring" :key="`${item.description}-${item.currency}`"><td>{{ item.description }}</td><td><span class="status-pill">{{ item.cadence }}</span><span class="muted"> · ~{{ item.typical_interval_days }} days</span></td><td>{{ item.occurrence_count }}</td><td>{{ formatUkDate(item.last_seen) }}</td><td class="numeric">{{ formatMoney(item.average_amount, item.currency) }}</td></tr>
+      <div class="panel-title"><h3>{{ t("views.reports.recurring") }}</h3><span>{{ t("views.reports.patterns", { count: recurring.length }) }}</span></div><div v-if="!recurring.length" class="table-empty">{{ t("views.reports.noPatterns") }}</div><div v-else class="table-wrap"><table><thead><tr><th>{{ t("views.reports.description") }}</th><th>{{ t("views.reports.cadence") }}</th><th>{{ t("views.reports.occurrences") }}</th><th>{{ t("views.reports.lastSeen") }}</th><th>{{ t("views.reports.average") }}</th></tr></thead><tbody>
+        <tr v-for="item in recurring" :key="`${item.description}-${item.currency}`"><td>{{ item.description }}</td><td><span class="status-pill">{{ t(`dynamic.cadences.${item.cadence}`) }}</span><span class="muted"> · {{ t("dynamic.approxDays", { count: item.typical_interval_days }) }}</span></td><td>{{ item.occurrence_count }}</td><td>{{ formatUkDate(item.last_seen) }}</td><td class="numeric">{{ formatMoney(item.average_amount, item.currency) }}</td></tr>
       </tbody></table></div>
     </article>
 
     <div class="export-actions">
-      <div><strong>Take your data with you</strong><span>Exports use the active date and currency filters.</span></div>
-      <a class="secondary-button" :href="api.exportUrl('csv', reportParams)">Export CSV</a>
-      <a class="primary-button" :href="api.exportUrl('xlsx', reportParams)">Export Excel</a>
+      <div><strong>{{ t("views.reports.exportTitle") }}</strong><span>{{ t("views.reports.exportNote") }}</span></div><a class="secondary-button" :href="api.exportUrl('csv', reportParams)">{{ t("views.reports.exportCsv") }}</a><a class="primary-button" :href="api.exportUrl('xlsx', reportParams)">{{ t("views.reports.exportExcel") }}</a>
     </div>
   </section>
 </template>

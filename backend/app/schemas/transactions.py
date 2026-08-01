@@ -17,6 +17,7 @@ class TransactionItem(BaseModel):
     merchant_id: int | None
     merchant_name: str | None
     category_id: int | None
+    category_code: str | None
     category_name: str | None
     confidence_score: Decimal | None
 
