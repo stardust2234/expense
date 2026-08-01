@@ -5,7 +5,9 @@ set -euo pipefail
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/docker-compose.yml}"
 CADDY_HTTP_PORT="${CADDY_HTTP_PORT:-18080}"
+CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT:-18443}"
 export CADDY_HTTP_PORT
+export CADDY_HTTPS_PORT
 export AUTH_THROTTLE_SECRET="${AUTH_THROTTLE_SECRET:-smoke-test-auth-throttle-secret-at-least-32-characters}"
 export PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://localhost}"
 export MAIL_FROM="${MAIL_FROM:-noreply@localhost}"
