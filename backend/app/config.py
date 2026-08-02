@@ -72,5 +72,7 @@ def get_settings() -> Settings:
         smtp_username=getenv("SMTP_USERNAME") or None,
         smtp_password=getenv("SMTP_PASSWORD") or None,
         mail_from=_required("MAIL_FROM", "noreply@localhost"),
-        public_app_url=_required("PUBLIC_APP_URL", "https://localhost:5173"),
+        public_app_url=_required(
+            "PUBLIC_APP_URL", getenv("RENDER_EXTERNAL_URL", "https://localhost:5173")
+        ),
     )

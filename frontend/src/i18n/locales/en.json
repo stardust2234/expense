@@ -5,6 +5,38 @@
     "tagline": "Make every transaction explainable.",
     "localWorkspace": "Local workspace"
   },
+  "landing": {
+    "navigation": "Landing page navigation",
+    "nav": { "about": "About", "features": "Features", "pricing": "Pricing" },
+    "register": "Register",
+    "kicker": "Clarity before every decision",
+    "heroTitle": "Know what you can safely spend.",
+    "heroCopy": "Folio turns bank transactions into a practical plan—showing what is committed, what is flexible and where you can cut back without guesswork.",
+    "startTrial": "Start your 30-day free trial",
+    "explore": "Explore features",
+    "noCard": "No charge for 30 days",
+    "expired": "Your 30-day free trial has expired. Financial features are paused.",
+    "manageAccount": "Manage account",
+    "preview": { "safe": "Safe to spend this week", "until": "until your next income", "essential": "Essentials remaining", "outlook": "Period-end outlook", "onTrack": "Your plan is on track", "risk": "No immediate overspending risk" },
+    "featuresKicker": "Built around real cash flow",
+    "featuresTitle": "From statement to spending plan",
+    "featuresCopy": "Automate the repetitive work while keeping every important financial decision under your control.",
+    "features": {
+      "import": { "title": "Import statements", "copy": "Bring in CSV, Excel and supported PDF statements with duplicate protection." },
+      "categorise": { "title": "Explain every payment", "copy": "Identify merchants, apply your rules and review uncertain transactions." },
+      "plan": { "title": "Plan around income", "copy": "Protect bills and essentials before calculating a realistic weekly allowance." },
+      "reports": { "title": "Find room to save", "copy": "Compare spending priorities and uncover recurring costs worth reviewing." }
+    },
+    "pricingKicker": "Simple pricing",
+    "pricingTitle": "Try every feature free for 30 days",
+    "pricingCopy": "One plan with the complete Folio experience. Continue only if it helps you stay in control.",
+    "planName": "Folio monthly access",
+    "month": "month",
+    "trial": "30-day free trial included",
+    "benefits": { "imports": "Statement importing and categorisation", "plan": "Safe-to-spend financial planning", "reports": "Reports and recurring-cost insights", "workspace": "Private personal workspace" },
+    "afterTrial": "£5.99 per month after your free trial.",
+    "footer": "Make every transaction explainable."
+  },
   "auth": {
     "eyebrow": "Private workspace",
     "loginTitle": "Sign in to Folio",
@@ -156,7 +188,10 @@
     "liquidity": "Folio liquidity",
     "usableBalance": "Current usable balance",
     "balanceSnapshot": "{source} balance snapshot",
-    "balanceSources": { "current": "Current", "opening": "Opening" },
+    "balanceSources": {
+      "current": "Current",
+      "opening": "Opening"
+    },
     "cycleEnded": "Cycle ended",
     "incomeToday": "Income due today",
     "nextIncome": "Next income",
@@ -182,32 +217,344 @@
     "loadError": "Could not load the dashboard"
   },
   "views": {
-    "import": { "eyebrow":"Start here","title":"Import transactions","subtitle":"Upload CSV, Excel or a text-based PDF. Every source row is retained before cleaning.","choose":"Choose a bank statement","types":"CSV, XLSX or text-based PDF · Maximum 10 MiB","fallbackCurrency":"Fallback currency","queueing":"Queueing import…","running":"Pipeline running…","submit":"Import and categorise","imported":"Imported","normalised":"Normalised","categorised":"Categorised","review":"Needs review","history":"Import history","batches":"{count} batches","empty":"No statements imported yet.","file":"File","rows":"Rows","outcome":"Outcome","retrying":"Retrying…","retry":"Retry failed rows","deleting":"Deleting…","delete":"Delete import","errors":{"history":"Could not load import history","refresh":"Could not refresh import status","upload":"Import failed","retry":"Could not retry import","delete":"Could not delete import"}},
-    "review": { "eyebrow":"Human in the loop","title":"Review queue","subtitle":"Choose a category and save a reusable matching rule in one step.","waiting":"waiting","loading":"Loading review queue…","caughtUp":"All caught up","empty":"No transactions need manual review.","merchantUnknown":"Merchant not identified","selectCategory":"Select a category","saveRule":"Save matching rule","saving":"Saving…","assign":"Assign & save rule","previous":"Previous","next":"Next","page":"Page {page} of {pages} · {count} waiting","pages":"Review queue pages","other":"Other","errors":{"load":"Could not load review queue","save":"Could not save correction"}},
-    "transactions": { "eyebrow":"Ledger","title":"Transactions","subtitle":"Search, filter and assign a category to multiple transactions at once.","search":"Search","searchPlaceholder":"Merchant or description","all":"All","merchant":"Merchant","from":"From","to":"To","batch":"Import batch","applyFilters":"Apply filters","selected":"{selected} selected · {total} total","chooseCategory":"Choose category","applyCategory":"Apply category","date":"Date","description":"Description","total":"Total","loading":"Loading transactions…","empty":"No transactions match these filters.","previous":"Previous","next":"Next","page":"Page {page} of {pages} · {count} transactions","pages":"Transaction pages","statuses":{"categorised":"Categorised","needs_review":"Needs review","normalised":"Normalised"},"errors":{"load":"Could not load transactions","update":"Could not update transactions","filters":"Could not load filters"}},
-    "rules": { "eyebrow":"Automation","title":"Rules","subtitle":"Higher-priority patterns are evaluated first.","pattern":"Pattern","matches":"Matches","enabled":"Enabled","delete":"Delete","deleteConfirm":"Delete rule “{pattern}”?","errors":{"load":"Could not load rules","save":"Could not save rule","delete":"Could not delete rule"}},
-    "merchants": { "eyebrow":"Improve recognition","title":"Merchants","subtitle":"Aliases connect noisy bank descriptions to one canonical merchant.","name":"Merchant name","aliases":"Initial aliases","adding":"Adding…","addMerchant":"Add merchant","loading":"Loading merchants…","empty":"No merchants configured yet.","removeAlias":"Remove alias","noAliases":"No aliases","aliasPlaceholder":"Add bank description alias","add":"Add","mergeInto":"Merge a variant into {name}","merge":"Merge","mergeConfirm":"Merge the selected merchant and all its transactions?","errors":{"load":"Could not load merchants","create":"Could not create merchant","addAlias":"Could not add alias","removeAlias":"Could not remove alias","merge":"Could not merge merchants"}},
-    "categoryManager": { "eyebrow":"Taxonomy","title":"Categories","subtitle":"Maintain the hierarchy used in review, rules and reports.","parent":"Parent","topLevel":"Top level","add":"Add category","delete":"Delete","deleteConfirm":"Delete category “{name}”?","seededNote":"Seeded names are translated automatically and cannot be renamed here.","errors":{"load":"Could not load categories","create":"Could not create category","update":"Could not update category","delete":"Could not delete category"}},
-    "reports": { "eyebrow":"Understand the pattern","title":"Reports","subtitle":"Net spending excludes Income and Transfers. Refunds reduce spending, and currencies remain separate.","from":"From","to":"To","all":"All","refresh":"Refresh report","loading":"Calculating totals…","categoryDistribution":"Category distribution","interactive":"Interactive","noCategoryPlot":"No category data to plot.","monthlyTrend":"Monthly trend","noMonthlyPlot":"No monthly data to plot.","byCategory":"By category","totals":"{count} totals","noCategories":"No categorised transactions yet.","transactions":"Transactions","total":"Total","byMonth":"By month","periods":"{count} periods","noMonths":"No monthly totals yet.","month":"Month","paymentSpending":"Spending by payment period","cycles":"{count} benefit cycles","createCycles":"Create payment cycles to compare benefit periods.","paymentPeriod":"Payment period","income":"Income","spending":"Spending","optional":"Optional","net":"Net","opportunities":"Recurring-cost opportunities","opportunitiesNote":"Alternatives are entered by you, not guessed by the app.","candidates":"{count} candidates","noOpportunities":"No stable recurring costs detected yet.","alternativeCost":"Alternative monthly cost","notResearched":"Not researched","switchingCost":"One-off switching cost","difficulty":"Difficulty","decision":"Decision","potentialSaving":"Potential saving","notAssessed":"Not assessed","perMonth":"{amount}/month","saveAssessment":"Save assessment","reset":"Reset","recurring":"Recurring expenses","patterns":"{count} patterns","noPatterns":"No recurring patterns detected yet.","description":"Description","cadence":"Cadence","occurrences":"Occurrences","lastSeen":"Last seen","average":"Average","exportTitle":"Take your data with you","exportNote":"Exports use the active date and currency filters.","exportCsv":"Export CSV","exportExcel":"Export Excel","difficulties":{"easy":"Easy","moderate":"Moderate","hard":"Hard"},"decisions":{"review":"Review","planned":"Planned","accepted":"Accepted","rejected":"Rejected"},"errors":{"load":"Could not load reports","save":"Could not save opportunity","reset":"Could not reset opportunity"}}
+    "import": {
+      "eyebrow": "Start here",
+      "title": "Import transactions",
+      "subtitle": "Upload CSV, Excel or a text-based PDF. Every source row is retained before cleaning.",
+      "choose": "Choose a bank statement",
+      "types": "CSV, XLSX or text-based PDF · Maximum 10 MiB",
+      "fallbackCurrency": "Fallback currency",
+      "queueing": "Queueing import…",
+      "running": "Pipeline running…",
+      "submit": "Import and categorise",
+      "imported": "Imported",
+      "normalised": "Normalised",
+      "categorised": "Categorised",
+      "review": "Needs review",
+      "history": "Import history",
+      "batches": "{count} batches",
+      "empty": "No statements imported yet.",
+      "file": "File",
+      "rows": "Rows",
+      "outcome": "Outcome",
+      "retrying": "Retrying…",
+      "retry": "Retry failed rows",
+      "deleting": "Deleting…",
+      "delete": "Delete import",
+      "errors": {
+        "history": "Could not load import history",
+        "refresh": "Could not refresh import status",
+        "upload": "Import failed",
+        "retry": "Could not retry import",
+        "delete": "Could not delete import"
+      }
+    },
+    "review": {
+      "eyebrow": "Human in the loop",
+      "title": "Review queue",
+      "subtitle": "Choose a category and save a reusable matching rule in one step.",
+      "waiting": "waiting",
+      "loading": "Loading review queue…",
+      "caughtUp": "All caught up",
+      "empty": "No transactions need manual review.",
+      "merchantUnknown": "Merchant not identified",
+      "selectCategory": "Select a category",
+      "saveRule": "Save matching rule",
+      "saving": "Saving…",
+      "assign": "Assign & save rule",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {page} of {pages} · {count} waiting",
+      "pages": "Review queue pages",
+      "other": "Other",
+      "errors": {
+        "load": "Could not load review queue",
+        "save": "Could not save correction"
+      }
+    },
+    "transactions": {
+      "eyebrow": "Ledger",
+      "title": "Transactions",
+      "subtitle": "Search, filter and assign a category to multiple transactions at once.",
+      "search": "Search",
+      "searchPlaceholder": "Merchant or description",
+      "all": "All",
+      "merchant": "Merchant",
+      "from": "From",
+      "to": "To",
+      "batch": "Import batch",
+      "applyFilters": "Apply filters",
+      "selected": "{selected} selected · {total} total",
+      "chooseCategory": "Choose category",
+      "applyCategory": "Apply category",
+      "date": "Date",
+      "description": "Description",
+      "total": "Total",
+      "loading": "Loading transactions…",
+      "empty": "No transactions match these filters.",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {page} of {pages} · {count} transactions",
+      "pages": "Transaction pages",
+      "statuses": {
+        "categorised": "Categorised",
+        "needs_review": "Needs review",
+        "normalised": "Normalised"
+      },
+      "errors": {
+        "load": "Could not load transactions",
+        "update": "Could not update transactions",
+        "filters": "Could not load filters"
+      }
+    },
+    "rules": {
+      "eyebrow": "Automation",
+      "title": "Rules",
+      "subtitle": "Higher-priority patterns are evaluated first.",
+      "pattern": "Pattern",
+      "matches": "Matches",
+      "enabled": "Enabled",
+      "delete": "Delete",
+      "deleteConfirm": "Delete rule “{pattern}”?",
+      "errors": {
+        "load": "Could not load rules",
+        "save": "Could not save rule",
+        "delete": "Could not delete rule"
+      }
+    },
+    "merchants": {
+      "eyebrow": "Improve recognition",
+      "title": "Merchants",
+      "subtitle": "Aliases connect noisy bank descriptions to one canonical merchant.",
+      "name": "Merchant name",
+      "aliases": "Initial aliases",
+      "adding": "Adding…",
+      "addMerchant": "Add merchant",
+      "loading": "Loading merchants…",
+      "empty": "No merchants configured yet.",
+      "removeAlias": "Remove alias",
+      "noAliases": "No aliases",
+      "aliasPlaceholder": "Add bank description alias",
+      "add": "Add",
+      "mergeInto": "Merge a variant into {name}",
+      "merge": "Merge",
+      "mergeConfirm": "Merge the selected merchant and all its transactions?",
+      "errors": {
+        "load": "Could not load merchants",
+        "create": "Could not create merchant",
+        "addAlias": "Could not add alias",
+        "removeAlias": "Could not remove alias",
+        "merge": "Could not merge merchants"
+      }
+    },
+    "categoryManager": {
+      "eyebrow": "Taxonomy",
+      "title": "Categories",
+      "subtitle": "Maintain the hierarchy used in review, rules and reports.",
+      "parent": "Parent",
+      "topLevel": "Top level",
+      "add": "Add category",
+      "delete": "Delete",
+      "deleteConfirm": "Delete category “{name}”?",
+      "seededNote": "Seeded names are translated automatically and cannot be renamed here.",
+      "errors": {
+        "load": "Could not load categories",
+        "create": "Could not create category",
+        "update": "Could not update category",
+        "delete": "Could not delete category"
+      }
+    },
+    "reports": {
+      "eyebrow": "Understand the pattern",
+      "title": "Reports",
+      "subtitle": "Net spending excludes Income and Transfers. Refunds reduce spending, and currencies remain separate.",
+      "from": "From",
+      "to": "To",
+      "all": "All",
+      "refresh": "Refresh report",
+      "loading": "Calculating totals…",
+      "categoryDistribution": "Category distribution",
+      "interactive": "Interactive",
+      "noCategoryPlot": "No category data to plot.",
+      "priorityDistribution": "Spending by priority",
+      "noPriorityPlot": "No priority data to plot.",
+      "byCategory": "By category",
+      "totals": "{count} totals",
+      "noCategories": "No categorised transactions yet.",
+      "transactions": "Transactions",
+      "total": "Total",
+      "byPriority": "By priority",
+      "noPriorities": "No priority totals yet.",
+      "paymentSpending": "Spending by payment period",
+      "cycles": "{count} benefit cycles",
+      "createCycles": "Create payment cycles to compare benefit periods.",
+      "paymentPeriod": "Payment period",
+      "income": "Income",
+      "spending": "Spending",
+      "optional": "Optional",
+      "net": "Net",
+      "opportunities": "Recurring-cost opportunities",
+      "opportunitiesNote": "Alternatives are entered by you, not guessed by the app.",
+      "candidates": "{count} candidates",
+      "noOpportunities": "No stable recurring costs detected yet.",
+      "alternativeCost": "Alternative monthly cost",
+      "notResearched": "Not researched",
+      "switchingCost": "One-off switching cost",
+      "difficulty": "Difficulty",
+      "decision": "Decision",
+      "potentialSaving": "Potential saving",
+      "notAssessed": "Not assessed",
+      "perMonth": "{amount}/month",
+      "opportunitySummary": "{cadence} · {count} payments · current monthly cost {amount}",
+      "firstYearSaving": "{amount} in year one",
+      "saveAssessment": "Save assessment",
+      "reset": "Reset",
+      "recurring": "Recurring expenses",
+      "patterns": "{count} patterns",
+      "noPatterns": "No recurring patterns detected yet.",
+      "description": "Description",
+      "cadence": "Cadence",
+      "occurrences": "Occurrences",
+      "lastSeen": "Last seen",
+      "average": "Average",
+      "difficulties": {
+        "easy": "Easy",
+        "moderate": "Moderate",
+        "hard": "Hard"
+      },
+      "decisions": {
+        "review": "Review",
+        "planned": "Planned",
+        "accepted": "Accepted",
+        "rejected": "Rejected"
+      },
+      "errors": {
+        "load": "Could not load reports",
+        "save": "Could not save opportunity",
+        "reset": "Could not reset opportunity"
+      }
+    }
   },
-  "importDetail": { "deleteConfirm":"Delete batch {id} ({file}) and all transactions imported from it? Categories, rules, merchants and your financial plan will be kept.","running":"Batch {id} is {status}. This page will update automatically.","failed":"Pipeline failed: {error}","normalisationFailed":"{count} row(s) could not be normalised.","duplicates":"{count} row(s) matched transactions imported earlier and were skipped.","batch":"Batch {id}","rowSummary":"{normalised}/{total} normalised","duplicatesShort":"{count} duplicates skipped","failedShort":"{count} failed","outcome":"{categorised} categorised, {review} review","resetConfirm":"Reset the saved assessment for {description}?" },
-  "dynamic": { "importStatuses":{"queued":"Queued","processing":"Processing","completed":"Completed","completed_with_errors":"Completed with errors","failed":"Failed"},"cadences":{"weekly":"Weekly","fortnightly":"Fortnightly","monthly":"Monthly","quarterly":"Quarterly","annual":"Annual","irregular":"Irregular"},"approxDays":"approximately {count} days" },
+  "importDetail": {
+    "deleteConfirm": "Delete batch {id} ({file}) and all transactions imported from it? Categories, rules, merchants and your financial plan will be kept.",
+    "running": "Batch {id} is {status}. This page will update automatically.",
+    "failed": "Pipeline failed: {error}",
+    "normalisationFailed": "{count} row(s) could not be normalised.",
+    "duplicates": "{count} row(s) matched transactions imported earlier and were skipped.",
+    "batch": "Batch {id}",
+    "rowSummary": "{normalised}/{total} normalised",
+    "duplicatesShort": "{count} duplicates skipped",
+    "failedShort": "{count} failed",
+    "outcome": "{categorised} categorised, {review} review",
+    "resetConfirm": "Reset the saved assessment for {description}?"
+  },
+  "dynamic": {
+    "importStatuses": {
+      "queued": "Queued",
+      "processing": "Processing",
+      "completed": "Completed",
+      "completed_with_errors": "Completed with errors",
+      "failed": "Failed"
+    },
+    "cadences": {
+      "weekly": "Weekly",
+      "fortnightly": "Fortnightly",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "annual": "Annual",
+      "irregular": "Irregular"
+    },
+    "approxDays": "approximately {count} days"
+  },
   "categories": {
-    "housing": { "_name": "Housing", "rent": "Rent", "council_tax": "Council tax", "repairs": "Repairs" },
-    "utilities": { "_name": "Utilities", "electricity": "Electricity", "water": "Water", "internet": "Internet", "mobile": "Mobile" },
-    "groceries": { "_name": "Groceries", "supermarkets": "Supermarkets", "food_shops": "Food shops" },
-    "transport": { "_name": "Transport", "public_transport": "Public transport", "fuel": "Fuel", "taxi": "Taxi", "maintenance": "Maintenance" },
-    "eating_out": { "_name": "Eating out", "restaurants": "Restaurants", "takeaway": "Takeaway", "cafés": "Cafés" },
-    "shopping": { "_name": "Shopping", "clothing": "Clothing", "electronics": "Electronics", "household_items": "Household items" },
-    "health": { "_name": "Health", "pharmacy": "Pharmacy", "dentist": "Dentist", "healthcare": "Healthcare" },
-    "personal_care": { "_name": "Personal care", "toiletries": "Toiletries", "haircare": "Haircare", "beauty": "Beauty" },
-    "entertainment": { "_name": "Entertainment", "streaming": "Streaming", "games": "Games", "events": "Events" },
-    "financial": { "_name": "Financial", "bank_fees": "Bank fees", "loan_interest": "Loan interest", "insurance": "Insurance" },
-    "subscriptions": { "_name": "Subscriptions", "software": "Software", "memberships": "Memberships" },
-    "savings_and_investments": { "_name": "Savings and investments", "isa": "ISA", "sipp": "SIPP", "savings": "Savings" },
-    "income": { "_name": "Income", "salary": "Salary", "refunds": "Refunds", "benefits": "Benefits" },
-    "transfers": { "_name": "Transfers", "own_account_transfers": "Own-account transfers", "credit_card_payments": "Credit-card payments" },
-    "other": { "_name": "Other", "uncategorized": "Uncategorized", "exceptional_expenses": "Exceptional expenses" }
+    "housing": {
+      "_name": "Housing",
+      "rent": "Rent",
+      "council_tax": "Council tax",
+      "repairs": "Repairs"
+    },
+    "utilities": {
+      "_name": "Utilities",
+      "electricity": "Electricity",
+      "water": "Water",
+      "internet": "Internet",
+      "mobile": "Mobile"
+    },
+    "groceries": {
+      "_name": "Groceries",
+      "supermarkets": "Supermarkets",
+      "food_shops": "Food shops"
+    },
+    "transport": {
+      "_name": "Transport",
+      "public_transport": "Public transport",
+      "fuel": "Fuel",
+      "taxi": "Taxi",
+      "maintenance": "Maintenance"
+    },
+    "eating_out": {
+      "_name": "Eating out",
+      "restaurants": "Restaurants",
+      "takeaway": "Takeaway",
+      "cafés": "Cafés"
+    },
+    "shopping": {
+      "_name": "Shopping",
+      "clothing": "Clothing",
+      "electronics": "Electronics",
+      "household_items": "Household items"
+    },
+    "health": {
+      "_name": "Health",
+      "pharmacy": "Pharmacy",
+      "dentist": "Dentist",
+      "healthcare": "Healthcare"
+    },
+    "personal_care": {
+      "_name": "Personal care",
+      "toiletries": "Toiletries",
+      "haircare": "Haircare",
+      "beauty": "Beauty"
+    },
+    "entertainment": {
+      "_name": "Entertainment",
+      "streaming": "Streaming",
+      "games": "Games",
+      "events": "Events"
+    },
+    "financial": {
+      "_name": "Financial",
+      "bank_fees": "Bank fees",
+      "loan_interest": "Loan interest",
+      "insurance": "Insurance"
+    },
+    "subscriptions": {
+      "_name": "Subscriptions",
+      "software": "Software",
+      "memberships": "Memberships"
+    },
+    "savings_and_investments": {
+      "_name": "Savings and investments",
+      "isa": "ISA",
+      "sipp": "SIPP",
+      "savings": "Savings"
+    },
+    "income": {
+      "_name": "Income",
+      "salary": "Salary",
+      "refunds": "Refunds",
+      "benefits": "Benefits"
+    },
+    "transfers": {
+      "_name": "Transfers",
+      "own_account_transfers": "Own-account transfers",
+      "credit_card_payments": "Credit-card payments"
+    },
+    "other": {
+      "_name": "Other",
+      "uncategorized": "Uncategorized",
+      "exceptional_expenses": "Exceptional expenses"
+    }
   },
   "plan": {
     "eyebrow": "Until your next payment",
@@ -223,6 +570,17 @@
     "preview": "Preview inferred plan",
     "expectedIncome": "Expected income",
     "confidence": "{value}% confidence",
+    "bankingDayAdjusted": "moved earlier from {date} for a non-banking day",
+    "proposalStates": {
+      "new": "New suggestion",
+      "unchanged": "Already confirmed",
+      "changed": "Changed — select to update"
+    },
+    "impactIncome": "Selected income",
+    "impactBills": "Selected bills",
+    "impactEssentials": "Essential allowances",
+    "predictedEnd": "Predicted period-end balance",
+    "safeWeekly": "Safe weekly spending",
     "allowanceSuffix": "{name} allowance",
     "evidenceMonths": "{count} month of evidence | {count} months of evidence",
     "confirmPlan": "Confirm selected plan",

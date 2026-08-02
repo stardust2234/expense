@@ -27,6 +27,7 @@ from app.schemas.plan_inference import (
     InferredAllowanceItem,
     InferredCommitmentItem,
     InferredIncomeItem,
+    InferredPlanImpact,
     PlanInferenceConfirmationResponse,
     PlanInferenceConfirmRequest,
     PlanInferencePreviewResponse,
@@ -82,7 +83,10 @@ def _preview_response(preview) -> PlanInferencePreviewResponse:
         target_month=preview.target_month,
         end_date=preview.end_date,
         currency=preview.currency,
-        income=InferredIncomeItem.model_validate(preview.income, from_attributes=True),
+        incomes=[
+            InferredIncomeItem.model_validate(item, from_attributes=True)
+            for item in preview.incomes
+        ],
         commitments=[
             InferredCommitmentItem.model_validate(item, from_attributes=True)
             for item in preview.commitments
@@ -91,6 +95,7 @@ def _preview_response(preview) -> PlanInferencePreviewResponse:
             InferredAllowanceItem.model_validate(item, from_attributes=True)
             for item in preview.allowances
         ],
+        impact=InferredPlanImpact.model_validate(preview.impact, from_attributes=True),
     )
 
 
@@ -143,7 +148,9 @@ async def post_plan_inference_confirmation(
         payment_cycle_id=confirmation.payment_cycle_id,
         created_cycle=confirmation.created_cycle,
         created_commitment_ids=list(confirmation.created_commitment_ids),
+        updated_commitment_ids=list(confirmation.updated_commitment_ids),
         created_allowance_ids=list(confirmation.created_allowance_ids),
+        updated_allowance_ids=list(confirmation.updated_allowance_ids),
     )
 
 

@@ -63,7 +63,7 @@ class PaymentCycle(WorkspaceOwned, Base):
             name="ck_payment_cycles_date_order",
         ),
         CheckConstraint(
-            "next_payment_date >= start_date AND next_payment_date < end_date",
+            "next_payment_date >= date(start_date, '-7 days') AND next_payment_date < end_date",
             name="ck_payment_cycles_payment_within_cycle",
         ),
         CheckConstraint(
@@ -175,6 +175,9 @@ class Commitment(WorkspaceOwned, Base):
         index=True,
     )
     recurrence: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    inference_identity_key: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     matched_expense_id: Mapped[int | None] = mapped_column(
         ForeignKey("expenses.id", ondelete="SET NULL"),
         nullable=True,
@@ -267,6 +270,9 @@ class CycleAllowance(WorkspaceOwned, Base):
         ForeignKey("categories.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    inference_identity_key: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
     )
 
     payment_cycle: Mapped[PaymentCycle] = relationship(back_populates="allowances")

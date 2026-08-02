@@ -4,14 +4,22 @@ import calendar
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
+from hashlib import sha256
 from statistics import median
+from typing import Literal
 
-from app.services.recurrence_detection import RecurrenceObservation, detect_recurrence
+from app.services.recurrence_detection import (
+    RecurrenceObservation,
+    RecurrencePattern,
+    detect_recurrence,
+)
+from app.services.uk_calendar import previous_uk_banking_day
 
 MIN_OCCURRENCES = 2
 INFERENCE_LOOKBACK_MONTHS = 6
 MAX_RECURRENCE_AGE_DAYS = 62
 ESSENTIAL_PRIORITIES = {"protected", "essential", "irregular_essential"}
+ProposalState = Literal["new", "unchanged", "changed"]
 
 
 @dataclass(frozen=True)
@@ -19,11 +27,14 @@ class TransactionEvidence:
     transaction_id: int
     transaction_date: date
     identity_key: str
+    payer_key: str
     description: str
     amount: int
     currency: str
     category_id: int
+    category_code: str | None
     category_name: str
+    root_category_code: str | None
     root_category_name: str
     priority: str
     cash_flow_kind: str
@@ -32,17 +43,22 @@ class TransactionEvidence:
 @dataclass(frozen=True)
 class IncomeProposal:
     proposal_id: str
+    identity_key: str
     description: str
     expected_amount: int
+    nominal_payment_date: date
     payment_date: date
+    date_adjusted: bool
     occurrence_count: int
     confidence: float
     evidence_transaction_ids: tuple[int, ...]
+    state: ProposalState = "new"
 
 
 @dataclass(frozen=True)
 class CommitmentProposal:
     proposal_id: str
+    identity_key: str
     name: str
     amount: int
     due_date: date
@@ -53,11 +69,14 @@ class CommitmentProposal:
     occurrence_count: int
     confidence: float
     evidence_transaction_ids: tuple[int, ...]
+    state: ProposalState = "new"
+    existing_id: int | None = None
 
 
 @dataclass(frozen=True)
 class AllowanceProposal:
     proposal_id: str
+    identity_key: str
     name: str
     allowance_type: str
     amount: int
@@ -67,6 +86,17 @@ class AllowanceProposal:
     months_observed: int
     confidence: float
     evidence_transaction_ids: tuple[int, ...]
+    state: ProposalState = "new"
+    existing_id: int | None = None
+
+
+@dataclass(frozen=True)
+class PlanImpact:
+    expected_income: int
+    commitments: int
+    essential_allowances: int
+    net_before_balance: int
+    period_days: int
 
 
 @dataclass(frozen=True)
@@ -74,9 +104,10 @@ class PlanPreview:
     target_month: date
     end_date: date
     currency: str
-    income: IncomeProposal
+    incomes: tuple[IncomeProposal, ...]
     commitments: tuple[CommitmentProposal, ...]
     allowances: tuple[AllowanceProposal, ...]
+    impact: PlanImpact
 
 
 class InsufficientPlanEvidenceError(ValueError):
@@ -96,36 +127,55 @@ def _shift_month(value: date, months: int) -> date:
 
 
 def _date_in_month(month: date, day: int) -> date:
-    return date(
-        month.year,
-        month.month,
-        min(day, calendar.monthrange(month.year, month.month)[1]),
-    )
+    return date(month.year, month.month, min(day, calendar.monthrange(month.year, month.month)[1]))
 
 
-def _monthly_pattern(rows: list[TransactionEvidence], *, minimum_occurrences: int):
-    return detect_recurrence(
-        tuple(
-            RecurrenceObservation(
-                observation_id=row.transaction_id,
-                observed_on=row.transaction_date,
-                amount=abs(row.amount),
-            )
-            for row in rows
-        ),
-        minimum_occurrences=minimum_occurrences,
-        allowed_cadences=frozenset({"monthly"}),
+def _proposal_id(kind: str, identity_key: str) -> str:
+    digest = sha256(identity_key.encode()).hexdigest()[:16]
+    return f"{kind}:{digest}"
+
+
+def _pattern_rows(
+    rows: list[TransactionEvidence], pattern: RecurrencePattern
+) -> list[TransactionEvidence]:
+    by_id = {row.transaction_id: row for row in rows}
+    return [by_id[item_id] for item_id in pattern.occurrence_ids]
+
+
+def _monthly_patterns(
+    rows: list[TransactionEvidence], *, minimum_occurrences: int
+) -> tuple[RecurrencePattern, ...]:
+    """Return distinct stable amount/cadence clusters from one identity."""
+    patterns: dict[tuple[int, ...], RecurrencePattern] = {}
+    for seed in rows:
+        seed_amount = abs(seed.amount)
+        tolerance = max(100, round(seed_amount * 0.10))
+        candidates = [row for row in rows if abs(abs(row.amount) - seed_amount) <= tolerance]
+        pattern = detect_recurrence(
+            tuple(
+                RecurrenceObservation(row.transaction_id, row.transaction_date, abs(row.amount))
+                for row in candidates
+            ),
+            minimum_occurrences=minimum_occurrences,
+            allowed_cadences=frozenset({"monthly"}),
+        )
+        if pattern is not None:
+            patterns[pattern.occurrence_ids] = pattern
+    return tuple(
+        sorted(
+            patterns.values(),
+            key=lambda item: (item.confidence, len(item.occurrence_ids), item.typical_amount),
+            reverse=True,
+        )
     )
 
 
 def infer_plan(
-    evidence: tuple[TransactionEvidence, ...],
-    *,
-    target_month: date,
-    currency: str,
+    evidence: tuple[TransactionEvidence, ...], *, target_month: date, currency: str
 ) -> PlanPreview:
     """Infer a reviewable plan without reading or mutating application state."""
     target_month = target_month.replace(day=1)
+    end_date = _add_month(target_month)
     currency = currency.upper()
     evidence_start = _shift_month(target_month, -INFERENCE_LOOKBACK_MONTHS)
     relevant = tuple(
@@ -135,102 +185,109 @@ def infer_plan(
         and evidence_start <= row.transaction_date < target_month
     )
 
-    grouped: defaultdict[str, list[TransactionEvidence]] = defaultdict(list)
-    for row in relevant:
-        grouped[row.identity_key].append(row)
-
-    income_by_category: defaultdict[int, list[TransactionEvidence]] = defaultdict(list)
+    income_groups: defaultdict[tuple[str, str], list[TransactionEvidence]] = defaultdict(list)
     for row in relevant:
         if row.cash_flow_kind == "income" and row.amount > 0:
-            income_by_category[row.category_id].append(row)
+            category_key = row.category_code or f"category:{row.category_id}"
+            income_groups[(category_key, row.payer_key)].append(row)
 
-    income_groups = [
-        (rows, pattern)
-        for rows in income_by_category.values()
-        if rows[0].cash_flow_kind == "income"
-        and all(row.amount > 0 for row in rows)
-        and (pattern := _monthly_pattern(rows, minimum_occurrences=2)) is not None
-        and (target_month - max(row.transaction_date for row in rows)).days
-        <= MAX_RECURRENCE_AGE_DAYS
-    ]
-    if not income_groups:
-        raise InsufficientPlanEvidenceError(
-            f"At least two monthly {currency} income transactions are required"
-        )
-    income_rows, income_pattern = max(
-        income_groups,
-        key=lambda item: (item[1].confidence, len(item[1].occurrence_ids), item[1].typical_amount),
-    )
-    income_rows_by_id = {row.transaction_id: row for row in income_rows}
-    stable_income_rows = [
-        income_rows_by_id[transaction_id] for transaction_id in income_pattern.occurrence_ids
-    ]
-    payment_day = round(median(row.transaction_date.day for row in stable_income_rows))
-    income = IncomeProposal(
-        proposal_id=f"income:category:{income_rows[0].category_id}",
-        description=stable_income_rows[-1].description,
-        expected_amount=income_pattern.typical_amount,
-        payment_date=_date_in_month(target_month, payment_day),
-        occurrence_count=len(income_pattern.occurrence_ids),
-        confidence=income_pattern.confidence,
-        evidence_transaction_ids=income_pattern.occurrence_ids,
-    )
-
-    recurring_keys: set[str] = set()
-    commitments: list[CommitmentProposal] = []
-    for identity_key, rows in grouped.items():
-        sample = rows[0]
-        pattern = _monthly_pattern(rows, minimum_occurrences=3)
-        if (
-            sample.cash_flow_kind != "spending"
-            or not all(row.amount < 0 for row in rows)
-            or pattern is None
-        ):
-            continue
-        recurring_keys.add(identity_key)
-        if (
-            target_month - max(row.transaction_date for row in rows)
-        ).days > MAX_RECURRENCE_AGE_DAYS:
-            continue
-        due_day = round(median(row.transaction_date.day for row in rows))
-        commitments.append(
-            CommitmentProposal(
-                proposal_id=f"commitment:{identity_key}",
-                name=rows[-1].description,
-                amount=pattern.typical_amount,
-                due_date=_date_in_month(target_month, due_day),
-                category_id=sample.category_id,
-                category_name=sample.category_name,
-                priority=sample.priority,
-                recurrence="monthly",
-                occurrence_count=len(pattern.occurrence_ids),
-                confidence=pattern.confidence,
-                evidence_transaction_ids=pattern.occurrence_ids,
+    incomes: list[IncomeProposal] = []
+    used_income_evidence: set[int] = set()
+    for (category_key, payer_key), rows in income_groups.items():
+        for pattern in _monthly_patterns(rows, minimum_occurrences=2):
+            if used_income_evidence.intersection(pattern.occurrence_ids):
+                continue
+            stable_rows = _pattern_rows(rows, pattern)
+            if (
+                target_month - max(row.transaction_date for row in stable_rows)
+            ).days > MAX_RECURRENCE_AGE_DAYS:
+                continue
+            nominal_day = round(median(row.transaction_date.day for row in stable_rows))
+            nominal_date = _date_in_month(target_month, nominal_day)
+            payment_date = previous_uk_banking_day(nominal_date)
+            identity_key = (
+                f"{category_key}|{payer_key}|monthly|{round(pattern.typical_amount / 500) * 500}"
             )
+            incomes.append(
+                IncomeProposal(
+                    proposal_id=_proposal_id("income", identity_key),
+                    identity_key=identity_key,
+                    description=stable_rows[-1].description,
+                    expected_amount=pattern.typical_amount,
+                    nominal_payment_date=nominal_date,
+                    payment_date=payment_date,
+                    date_adjusted=payment_date != nominal_date,
+                    occurrence_count=len(pattern.occurrence_ids),
+                    confidence=pattern.confidence,
+                    evidence_transaction_ids=pattern.occurrence_ids,
+                )
+            )
+            used_income_evidence.update(pattern.occurrence_ids)
+    if not incomes:
+        raise InsufficientPlanEvidenceError(
+            f"At least two recurring {currency} income transactions before the selected plan month are required"
         )
 
-    monthly_category_totals: defaultdict[tuple[int, str, str, str], defaultdict[str, int]] = (
-        defaultdict(lambda: defaultdict(int))
-    )
-    monthly_category_evidence: defaultdict[tuple[int, str, str, str], list[int]] = defaultdict(list)
+    spending_groups: defaultdict[tuple[str, str], list[TransactionEvidence]] = defaultdict(list)
     for row in relevant:
-        if (
-            row.cash_flow_kind != "spending"
-            or row.priority not in ESSENTIAL_PRIORITIES
-            or row.identity_key in recurring_keys
-        ):
+        if row.cash_flow_kind == "spending" and row.amount < 0:
+            category_key = row.category_code or f"category:{row.category_id}"
+            spending_groups[(row.identity_key, category_key)].append(row)
+
+    recurring_transaction_ids: set[int] = set()
+    commitments: list[CommitmentProposal] = []
+    for (base_identity, category_key), rows in spending_groups.items():
+        used_group_evidence: set[int] = set()
+        for pattern in _monthly_patterns(rows, minimum_occurrences=3):
+            if used_group_evidence.intersection(pattern.occurrence_ids):
+                continue
+            stable_rows = _pattern_rows(rows, pattern)
+            recurring_transaction_ids.update(pattern.occurrence_ids)
+            used_group_evidence.update(pattern.occurrence_ids)
+            if (
+                target_month - max(row.transaction_date for row in stable_rows)
+            ).days > MAX_RECURRENCE_AGE_DAYS:
+                continue
+            due_day = round(median(row.transaction_date.day for row in stable_rows))
+            identity_key = f"{base_identity}|{category_key}|monthly|{round(pattern.typical_amount / 500) * 500}"
+            sample = stable_rows[-1]
+            commitments.append(
+                CommitmentProposal(
+                    proposal_id=_proposal_id("commitment", identity_key),
+                    identity_key=identity_key,
+                    name=sample.description,
+                    amount=pattern.typical_amount,
+                    due_date=_date_in_month(target_month, due_day),
+                    category_id=sample.category_id,
+                    category_name=sample.category_name,
+                    priority=sample.priority,
+                    recurrence="monthly",
+                    occurrence_count=len(pattern.occurrence_ids),
+                    confidence=pattern.confidence,
+                    evidence_transaction_ids=pattern.occurrence_ids,
+                )
+            )
+
+    monthly_totals: defaultdict[tuple[int, str, str, str], defaultdict[str, int]] = defaultdict(
+        lambda: defaultdict(int)
+    )
+    monthly_evidence: defaultdict[tuple[int, str, str, str], list[int]] = defaultdict(list)
+    for row in relevant:
+        if row.cash_flow_kind != "spending" or row.priority not in ESSENTIAL_PRIORITIES:
             continue
-        key = (row.category_id, row.category_name, row.root_category_name, row.priority)
-        monthly_category_totals[key][row.transaction_date.strftime("%Y-%m")] += -row.amount
-        monthly_category_evidence[key].append(row.transaction_id)
+        if row.transaction_id in recurring_transaction_ids:
+            continue
+        root_key = row.root_category_code or row.root_category_name.casefold()
+        key = (row.category_id, row.category_name, root_key, row.priority)
+        monthly_totals[key][row.transaction_date.strftime("%Y-%m")] += -row.amount
+        monthly_evidence[key].append(row.transaction_id)
 
     allowances: list[AllowanceProposal] = []
-    for key, totals in monthly_category_totals.items():
-        category_id, category_name, root_name, priority = key
+    for key, totals in monthly_totals.items():
+        category_id, category_name, root_key, priority = key
         if len(totals) < MIN_OCCURRENCES:
             continue
         values = [max(value, 0) for value in totals.values()]
-        root_key = root_name.casefold()
         allowance_type = (
             "food"
             if root_key == "groceries"
@@ -240,9 +297,11 @@ def infer_plan(
             if priority == "irregular_essential"
             else "custom"
         )
+        identity_key = f"allowance:category:{category_id}"
         allowances.append(
             AllowanceProposal(
-                proposal_id=f"allowance:category:{category_id}",
+                proposal_id=identity_key,
+                identity_key=identity_key,
                 name=category_name,
                 allowance_type=allowance_type,
                 amount=round(median(values)),
@@ -251,15 +310,28 @@ def infer_plan(
                 priority=priority,
                 months_observed=len(totals),
                 confidence=round(min(len(totals) / 4, 1), 4),
-                evidence_transaction_ids=tuple(monthly_category_evidence[key]),
+                evidence_transaction_ids=tuple(monthly_evidence[key]),
             )
         )
 
+    incomes.sort(key=lambda item: (item.payment_date, -item.expected_amount, item.description))
+    commitments.sort(key=lambda item: (item.due_date, item.name))
+    allowances.sort(key=lambda item: item.name.casefold())
+    expected_income = sum(item.expected_amount for item in incomes)
+    commitment_total = sum(item.amount for item in commitments)
+    allowance_total = sum(item.amount for item in allowances)
     return PlanPreview(
         target_month=target_month,
-        end_date=_add_month(target_month),
+        end_date=end_date,
         currency=currency,
-        income=income,
-        commitments=tuple(sorted(commitments, key=lambda item: (item.due_date, item.name))),
-        allowances=tuple(sorted(allowances, key=lambda item: item.name.casefold())),
+        incomes=tuple(incomes),
+        commitments=tuple(commitments),
+        allowances=tuple(allowances),
+        impact=PlanImpact(
+            expected_income=expected_income,
+            commitments=commitment_total,
+            essential_allowances=allowance_total,
+            net_before_balance=expected_income - commitment_total - allowance_total,
+            period_days=(end_date - target_month).days,
+        ),
     )

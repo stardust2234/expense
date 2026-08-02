@@ -8,6 +8,15 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Category, Expense, TransactionStatus
 from app.services.cash_flow import spending_contribution
 
+PRIORITY_ORDER = {
+    priority: index
+    for index, priority in enumerate(
+        ("protected", "essential", "adjustable", "irregular_essential", "optional", "transfer")
+    )
+}
+MAX_REPORT_ROWS = 50_000
+MAX_REPORT_RANGE_DAYS = 3660
+
 
 @dataclass(frozen=True)
 class CategoryTotalRecord:
@@ -20,8 +29,8 @@ class CategoryTotalRecord:
 
 
 @dataclass(frozen=True)
-class MonthlyTotalRecord:
-    month: str
+class PriorityTotalRecord:
+    priority: str
     currency: str
     total_amount: int
     transaction_count: int
@@ -30,6 +39,12 @@ class MonthlyTotalRecord:
 def validate_date_range(date_from: date | None, date_to: date | None) -> None:
     if date_from is not None and date_to is not None and date_from > date_to:
         raise ValueError("date_from must be on or before date_to")
+    if (
+        date_from is not None
+        and date_to is not None
+        and (date_to - date_from).days > MAX_REPORT_RANGE_DAYS
+    ):
+        raise ValueError(f"Report date range must not exceed {MAX_REPORT_RANGE_DAYS} days")
 
 
 def report_expenses(
@@ -39,6 +54,7 @@ def report_expenses(
     date_to: date | None = None,
     currency: str | None = None,
 ) -> list[Expense]:
+    validate_date_range(date_from, date_to)
     statement = (
         select(Expense)
         .where(Expense.status == TransactionStatus.CATEGORISED)
@@ -53,7 +69,16 @@ def report_expenses(
         statement = statement.where(Expense.transaction_date <= date_to)
     if currency is not None:
         statement = statement.where(Expense.currency == currency.upper())
-    return list(session.scalars(statement.order_by(Expense.transaction_date, Expense.id)).all())
+    expenses = list(
+        session.scalars(
+            statement.order_by(Expense.transaction_date, Expense.id).limit(MAX_REPORT_ROWS + 1)
+        ).all()
+    )
+    if len(expenses) > MAX_REPORT_ROWS:
+        raise ValueError(
+            f"Report contains more than {MAX_REPORT_ROWS} transactions; use a narrower date range"
+        )
+    return expenses
 
 
 def get_category_totals(
@@ -86,13 +111,13 @@ def get_category_totals(
     ]
 
 
-def get_monthly_totals(
+def get_priority_totals(
     session: Session,
     *,
     date_from: date | None = None,
     date_to: date | None = None,
     currency: str | None = None,
-) -> list[MonthlyTotalRecord]:
+) -> list[PriorityTotalRecord]:
     validate_date_range(date_from, date_to)
     totals: defaultdict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0])
     for expense in report_expenses(
@@ -103,10 +128,13 @@ def get_monthly_totals(
         contribution = spending_contribution(expense.amount, expense.category)
         if contribution is None:
             continue
-        bucket = totals[(expense.transaction_date.strftime("%Y-%m"), expense.currency)]
+        priority = (expense.priority_override or expense.category.default_priority).value
+        bucket = totals[(priority, expense.currency)]
         bucket[0] += contribution
         bucket[1] += 1
     return [
-        MonthlyTotalRecord(month, row_currency, values[0], values[1])
-        for (month, row_currency), values in sorted(totals.items())
+        PriorityTotalRecord(priority, row_currency, values[0], values[1])
+        for (priority, row_currency), values in sorted(
+            totals.items(), key=lambda item: (PRIORITY_ORDER.get(item[0][0], 99), item[0][1])
+        )
     ]

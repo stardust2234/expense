@@ -20,6 +20,11 @@ from app.services.matching import (
 )
 from app.services.transaction_normaliser import NormalisationError, normalise_transaction
 
+MAX_PROCESSING_ROWS = 25_000
+MAX_MATCHING_MERCHANTS = 10_000
+MAX_CATEGORISATION_RULES = 10_000
+MAX_DEDUPLICATION_EXPENSES = 100_000
+
 
 @dataclass(frozen=True)
 class NormalisationResult:
@@ -50,7 +55,9 @@ def normalise_pending_transactions(
     statement = statement.order_by(RawTransaction.id)
     if import_batch_id is not None:
         statement = statement.where(RawTransaction.import_batch_id == import_batch_id)
-    pending = session.scalars(statement).all()
+    pending = session.scalars(statement.limit(MAX_PROCESSING_ROWS + 1)).all()
+    if len(pending) > MAX_PROCESSING_ROWS:
+        raise ValueError(f"An import cannot process more than {MAX_PROCESSING_ROWS} rows")
     payment_cycles = session.scalars(select(PaymentCycle).order_by(PaymentCycle.start_date)).all()
 
     normalised_count = 0
@@ -64,7 +71,13 @@ def normalise_pending_transactions(
                 Expense.import_batch_id.is_(None),
             )
         )
-    existing_expenses = session.scalars(existing_statement).all()
+    existing_expenses = session.scalars(
+        existing_statement.limit(MAX_DEDUPLICATION_EXPENSES + 1)
+    ).all()
+    if len(existing_expenses) > MAX_DEDUPLICATION_EXPENSES:
+        raise ValueError(
+            "The workspace contains too many transactions for in-memory duplicate detection"
+        )
     existing_by_fingerprint: dict[tuple[object, ...], list[Expense]] = {}
     for expense in existing_expenses:
         fingerprint = (
@@ -147,15 +160,25 @@ def categorise_normalised_transactions(
     )
     if import_batch_id is not None:
         expense_statement = expense_statement.where(Expense.import_batch_id == import_batch_id)
-    expenses = session.scalars(expense_statement).all()
+    expenses = session.scalars(expense_statement.limit(MAX_PROCESSING_ROWS + 1)).all()
+    if len(expenses) > MAX_PROCESSING_ROWS:
+        raise ValueError(f"An import cannot process more than {MAX_PROCESSING_ROWS} rows")
     merchants = session.scalars(
-        select(Merchant).options(selectinload(Merchant.aliases)).order_by(Merchant.id)
+        select(Merchant)
+        .options(selectinload(Merchant.aliases))
+        .order_by(Merchant.id)
+        .limit(MAX_MATCHING_MERCHANTS + 1)
     ).all()
+    if len(merchants) > MAX_MATCHING_MERCHANTS:
+        raise ValueError("The workspace contains too many merchants for automatic matching")
     rules = session.scalars(
         select(CategorisationRule)
         .where(CategorisationRule.enabled.is_(True))
         .order_by(CategorisationRule.priority.desc(), CategorisationRule.id)
+        .limit(MAX_CATEGORISATION_RULES + 1)
     ).all()
+    if len(rules) > MAX_CATEGORISATION_RULES:
+        raise ValueError("The workspace contains too many categorisation rules")
 
     merchant_by_id = {merchant.id: merchant for merchant in merchants}
     rule_by_id = {rule.id: rule for rule in rules}

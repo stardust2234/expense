@@ -36,9 +36,15 @@ from app.services.import_batch_service import (
     get_import_batch,
     list_import_batches,
 )
-from app.services.import_job_service import enqueue_import_job, queue_import_batch
+from app.services.import_job_service import (
+    ImportQueueFullError,
+    enqueue_import_job,
+    queue_import_batch,
+)
 
 MAX_STATEMENT_BYTES = 10 * 1024 * 1024
+MAX_DECODED_STATEMENT_CHARS = 25 * 1024 * 1024
+MAX_PDF_PAGES = 250
 router = APIRouter(prefix="/imports", tags=["imports"])
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
 
@@ -131,11 +137,14 @@ async def retry_import(
     queued_batch_id = batch.id
     item = _batch_item(batch)
     session.rollback()
-    enqueue_import_job(
-        queued_batch_id,
-        retry_failed=True,
-        session_factory=worker_sessions,
-    )
+    try:
+        enqueue_import_job(
+            queued_batch_id,
+            retry_failed=True,
+            session_factory=worker_sessions,
+        )
+    except ImportQueueFullError as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
     return item
 
 
@@ -214,17 +223,20 @@ async def _process_upload(
     queued_batch_id = batch.id
     item = _batch_item(batch)
     session.rollback()
-    enqueue_import_job(
-        queued_batch_id,
-        session_factory=worker_sessions,
-    )
+    try:
+        enqueue_import_job(queued_batch_id, session_factory=worker_sessions)
+    except ImportQueueFullError as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
     return item
 
 
 def _statement_to_csv(content: bytes, suffix: str) -> str:
     if suffix == ".csv":
         try:
-            return content.decode("utf-8-sig")
+            text = content.decode("utf-8-sig")
+            if len(text) > MAX_DECODED_STATEMENT_CHARS:
+                raise ValueError("Decoded statement is too large")
+            return text
         except UnicodeDecodeError as error:
             raise ValueError("CSV file must use UTF-8 encoding") from error
 
@@ -234,17 +246,28 @@ def _statement_to_csv(content: bytes, suffix: str) -> str:
         except (BadZipFile, InvalidFileException) as error:
             raise ValueError("Excel file is invalid or unreadable") from error
         worksheet = workbook.active
+        if worksheet.max_row > 25_001 or worksheet.max_column > 100:
+            workbook.close()
+            raise ValueError("Excel statement contains too many rows or columns")
         output = StringIO()
         writer = csv.writer(output)
         for row in worksheet.iter_rows(values_only=True):
             writer.writerow([_excel_value(value) for value in row])
+            if output.tell() > MAX_DECODED_STATEMENT_CHARS:
+                workbook.close()
+                raise ValueError("Decoded statement is too large")
+        workbook.close()
         return output.getvalue()
 
     try:
         reader = PdfReader(BytesIO(content))
     except PdfReadError as error:
         raise ValueError("PDF file is invalid or unreadable") from error
+    if len(reader.pages) > MAX_PDF_PAGES:
+        raise ValueError(f"PDF statement must not exceed {MAX_PDF_PAGES} pages")
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    if len(text) > MAX_DECODED_STATEMENT_CHARS:
+        raise ValueError("Decoded statement is too large")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     comma_lines = [line for line in lines if "," in line]
     tab_lines = [line for line in lines if "\t" in line]

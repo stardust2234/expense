@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: expense-app
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./infra/docker/render.Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    numInstances: 1
+    envVars:
+      - key: APP_NAME
+        value: expense-categoriser
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:////data/expense.db
+      - key: ALLOW_REGISTRATION
+        value: "true"
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_SESSION_DAYS
+        value: "7"
+      - key: AUTH_THROTTLE_SECRET
+        generateValue: true
+      - key: ADMIN_BOOTSTRAP_SECRET
+        generateValue: true
+      - key: MAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+    disk:
+      name: expense-data
+      mountPath: /data
+      sizeGB: 1
+

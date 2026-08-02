@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import (
     JSON,
@@ -59,6 +59,13 @@ class Workspace(Base):
     is_claimed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0"), index=True
     )
+    trial_ends_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC) + timedelta(days=30),
+        server_default=text("(datetime('now', '+30 days'))"),
+    )
+    access_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )

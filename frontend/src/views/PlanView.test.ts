@@ -139,17 +139,22 @@ beforeEach(async () => {
     target_month: "2026-08-01",
     end_date: "2026-09-01",
     currency: "GBP",
-    income: {
+    incomes: [{
       proposal_id: "income:benefit",
+      identity_key: "income:benefit",
       description: "Benefit",
       expected_amount: 80000,
-      payment_date: "2026-08-29",
+      nominal_payment_date: "2026-08-29",
+      payment_date: "2026-08-28",
+      date_adjusted: true,
       occurrence_count: 3,
       confidence: 0.9,
       evidence_transaction_ids: [1, 2, 3],
-    },
+      state: "new",
+    }],
     commitments: [{
       proposal_id: "commitment:rent",
+      identity_key: "commitment:rent",
       name: "Rent",
       amount: 32000,
       due_date: "2026-08-01",
@@ -160,14 +165,25 @@ beforeEach(async () => {
       occurrence_count: 3,
       confidence: 0.9,
       evidence_transaction_ids: [4, 5, 6],
+      state: "new",
+      existing_id: null,
     }],
     allowances: [],
+    impact: {
+      expected_income: 80000,
+      commitments: 32000,
+      essential_allowances: 0,
+      net_before_balance: 48000,
+      period_days: 31,
+    },
   });
   apiMock.confirmPlan.mockResolvedValue({
     payment_cycle_id: 8,
     created_cycle: true,
     created_commitment_ids: [13],
+    updated_commitment_ids: [],
     created_allowance_ids: [],
+    updated_allowance_ids: [],
   });
 
   host = document.createElement("div");
@@ -194,12 +210,13 @@ describe("Plan page editing", () => {
     const inferencePanel = [...host.querySelectorAll("article")].find((item) =>
       item.textContent?.includes("Build from imported transactions"),
     ) as HTMLElement;
-    const balance = inferencePanel.querySelector('input[type="number"]') as HTMLInputElement;
-    inputValue(balance, "400");
     button("Preview inferred plan", inferencePanel).click();
     await settle();
 
     expect(apiMock.previewPlan).toHaveBeenCalled();
+    const balance = inferencePanel.querySelector('input[type="number"]') as HTMLInputElement;
+    inputValue(balance, "400");
+    await nextTick();
     button("Confirm selected plan", inferencePanel).click();
     await settle();
 
@@ -207,6 +224,7 @@ describe("Plan page editing", () => {
       expect.objectContaining({
         target_month: "2026-08-01",
         opening_balance: 40000,
+        income_proposal_ids: ["income:benefit"],
         commitment_proposal_ids: ["commitment:rent"],
       }),
     );

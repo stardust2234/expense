@@ -104,7 +104,7 @@ onMounted(() => {
 
 <template>
   <section class="view-stack">
-    <header class="view-heading account-heading">
+    <header class="view-heading">
       <div>
         <p class="eyebrow">{{ t("account.eyebrow") }}</p>
         <h2>{{ t("account.title") }}</h2>
@@ -113,6 +113,24 @@ onMounted(() => {
     </header>
 
     <p v-if="error" class="message error-message">{{ error }}</p>
+
+    <article v-if="currentUser?.is_admin" class="panel account-panel admin-panel">
+      <h3>{{ t("account.workspaceUsers") }}</h3>
+      <p class="account-status">{{ t("account.workspaceUsersHelp") }}</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>{{ t("common.name") }}</th><th>{{ t("auth.email") }}</th><th>{{ t("account.verifiedShort") }}</th><th>{{ t("account.active") }}</th><th>{{ t("account.administrator") }}</th></tr></thead>
+          <tbody>
+            <tr v-for="user in workspaceUsers" :key="user.id">
+              <td>{{ user.display_name }}</td><td>{{ user.email }}</td>
+              <td>{{ user.email_verified_at ? t("common.yes") : t("common.no") }}</td>
+              <td><input type="checkbox" :checked="user.is_active" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_active: ($event.target as HTMLInputElement).checked })" /></td>
+              <td><input type="checkbox" :checked="user.is_admin" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_admin: ($event.target as HTMLInputElement).checked })" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
 
     <article class="panel account-panel">
       <h3>{{ t("account.security") }}</h3>
@@ -182,24 +200,6 @@ onMounted(() => {
           </button>
         </div>
       </form>
-    </article>
-
-    <article v-if="currentUser?.is_admin" class="panel account-panel admin-panel">
-      <h3>{{ t("account.workspaceUsers") }}</h3>
-      <p class="account-status">{{ t("account.workspaceUsersHelp") }}</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>{{ t("common.name") }}</th><th>{{ t("auth.email") }}</th><th>{{ t("account.verifiedShort") }}</th><th>{{ t("account.active") }}</th><th>{{ t("account.administrator") }}</th></tr></thead>
-          <tbody>
-            <tr v-for="user in workspaceUsers" :key="user.id">
-              <td>{{ user.display_name }}</td><td>{{ user.email }}</td>
-              <td>{{ user.email_verified_at ? t("common.yes") : t("common.no") }}</td>
-              <td><input type="checkbox" :checked="user.is_active" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_active: ($event.target as HTMLInputElement).checked })" /></td>
-              <td><input type="checkbox" :checked="user.is_admin" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_admin: ($event.target as HTMLInputElement).checked })" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </article>
 
     <article v-if="currentUser?.is_admin" class="panel account-panel admin-panel">

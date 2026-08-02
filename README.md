@@ -84,16 +84,18 @@ the source files are not retained as a separate upload directory.
 ### Inferred financial plans
 
 `GET /api/plan-inference/preview?target_month=2026-08-01&currency=GBP`
-builds a read-only suggestion from categorised transaction evidence. It returns the inferred
-income payment, recurring commitments, variable essential allowances, confidence scores, and
-the transaction IDs supporting every suggestion.
+builds a read-only suggestion from categorised transaction evidence. It returns separately
+clustered recurring income sources, UK banking-day-adjusted payment dates, recurring commitments,
+variable essential allowances, confidence scores, proposal states, an impact summary, and the
+transaction IDs supporting every suggestion.
 
 `POST /api/plan-inference/confirm` recomputes that evidence and creates only the proposal IDs
 selected by the client. Previewing never writes plan data, and confirmation rejects unknown or
-stale proposal IDs. At least two monthly categorised income transactions are required.
-The Plan page exposes this preview-and-confirm workflow directly. Inference uses the latest six
-months of evidence, ignores recurring patterns no longer seen recently, and nets refunds into
-variable allowance estimates.
+stale proposal IDs. At least two recurring categorised transactions are required for an income
+source. The Plan page exposes this preview-and-confirm workflow directly, asks for balances only
+after preview, and requires changed proposals to be selected explicitly. Inference uses the latest
+six months of evidence, ignores recurring patterns no longer seen recently, separates stable payer
+and amount clusters, and handles refunds without hiding recurring commitments.
 
 Before upgrading containers, stop the application and back up the database:
 
@@ -106,6 +108,21 @@ make up
 Do not run multiple API containers against this SQLite database. Imports use a tracked
 single-process background worker, and interrupted queued or processing jobs are resumed when the
 API starts.
+
+### Render Blueprint deployment
+
+[`render.yaml`](render.yaml) deploys the frontend and API as one same-origin Docker web service and
+stores SQLite under a 1 GB persistent disk mounted at `/data`. Import the Blueprint in Render and
+provide `MAIL_FROM`, `SMTP_HOST`, `SMTP_USERNAME`, and `SMTP_PASSWORD` when prompted. Render supplies
+the public application URL automatically; set `PUBLIC_APP_URL` manually only when using a custom
+domain.
+
+The persistent disk requires a paid instance and restricts the service to one instance, which is
+also the supported topology for this SQLite application. Migrations and idempotent category seeding
+run when the container starts. Before creating the first account, set `ALLOW_REGISTRATION=true`,
+copy the generated `ADMIN_BOOTSTRAP_SECRET` from the Render environment into the registration form,
+and then restore `ALLOW_REGISTRATION=false`. Removing the bootstrap secret after the initial
+administrator is claimed is recommended.
 
 The application uses Argon2id passwords, verified email addresses, password recovery, opaque
 server-side sessions, CSRF protection and workspace-scoped financial records. Email changes remain

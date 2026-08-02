@@ -1,4 +1,4 @@
-import type { CategoryTotal, MonthlyTotal, PaymentPeriod } from "../../types/api";
+import type { CategoryTotal, PaymentPeriod, PriorityTotal } from "../../types/api";
 import { formatCategoryName } from "../../utils/category";
 import { formatUkDate, inclusiveCycleEnd } from "../../utils/date";
 import { formatMoney, toMajorUnits } from "../../utils/money";
@@ -6,6 +6,13 @@ import { formatMoney, toMajorUnits } from "../../utils/money";
 type Translate = (key: string) => string;
 
 const colours = ["#22D3EE", "#818CF8", "#E879F9", "#34D399"];
+const priorityColours: Record<string, string> = {
+  protected: "#FB7185",
+  essential: "#34D399",
+  adjustable: "#22D3EE",
+  irregular_essential: "#A78BFA",
+  optional: "#FBBF24",
+};
 
 export function categoryChart(items: CategoryTotal[]) {
   return [{
@@ -19,20 +26,37 @@ export function categoryChart(items: CategoryTotal[]) {
   }];
 }
 
-export function monthlyChart(items: MonthlyTotal[]) {
-  const currencies = [...new Set(items.map((item) => item.currency))];
-  return currencies.map((currency, index) => ({
-    type: "scatter",
-    mode: "lines+markers",
-    name: currency,
-    x: items.filter((item) => item.currency === currency).map((item) => item.month),
-    y: items.filter((item) => item.currency === currency).map((item) => toMajorUnits(item.total_amount, item.currency)),
-    line: { width: 2, color: colours[index % 3] },
-    marker: { size: 7, color: colours[index % 3] },
-    fill: "tozeroy",
-    fillcolor: "rgba(129,140,248,0.10)",
-    hovertemplate: `%{x}<br>%{y:.2f} ${currency}<extra></extra>`,
-  }));
+export function priorityDistributionChart(items: PriorityTotal[], t: Translate) {
+  const distributableItems = items.filter((item) => item.total_amount > 0);
+  const currencies = [...new Set(distributableItems.map((item) => item.currency))];
+
+  return currencies.map((currency, index) => {
+    const currencyItems = distributableItems.filter((item) => item.currency === currency);
+    const domainWidth = 1 / currencies.length;
+    const domainPadding = Math.min(0.055, domainWidth / 8);
+
+    return {
+      type: "pie",
+      name: currency,
+      labels: currencyItems.map((item) => t(`common.priorities.${item.priority}`)),
+      values: currencyItems.map((item) => toMajorUnits(item.total_amount, item.currency)),
+      customdata: currencyItems.map((item) => formatMoney(item.total_amount, item.currency)),
+      hole: 0.58,
+      sort: false,
+      textinfo: "percent",
+      textposition: "inside",
+      marker: {
+        colors: currencyItems.map((item) => priorityColours[item.priority] ?? "#818CF8"),
+        line: { color: "rgba(15,23,42,0.65)", width: 1 },
+      },
+      domain: {
+        x: [index * domainWidth + domainPadding, (index + 1) * domainWidth - domainPadding],
+        y: [0.04, 0.78],
+      },
+      title: { text: currency },
+      hovertemplate: `%{label}<br>%{customdata}<br>%{percent}<extra>${currency}</extra>`,
+    };
+  });
 }
 
 export function paymentPeriodChart(items: PaymentPeriod[], t: Translate) {

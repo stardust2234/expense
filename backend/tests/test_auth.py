@@ -93,13 +93,17 @@ async def test_first_registration_atomically_claims_existing_workspace_and_data(
 
     assert response.status_code == 201
     session.expire_all()
-    assert response.json()["user"] == {
+    response_user = response.json()["user"]
+    assert response_user == {
         "id": 1,
         "email": "admin@example.com",
         "display_name": "First Admin",
         "is_admin": True,
         "workspace_id": workspace.id,
         "email_verified": False,
+        "trial_ends_at": response_user["trial_ends_at"],
+        "access_expires_at": None,
+        "access_active": True,
     }
     user = session.scalar(select(User).where(User.email == "admin@example.com"))
     assert user is not None
@@ -155,6 +159,42 @@ async def test_second_registration_gets_private_workspace_without_admin_role(
     assert response.json()["user"]["workspace_id"] != first_workspace.id
     assert session.scalar(select(User).where(User.email == "first@example.com")).is_admin is True
     assert session.scalar(select(User).where(User.email == "second@example.com")).is_admin is False
+
+
+@pytest.mark.anyio
+async def test_expired_trial_blocks_financial_api_but_keeps_account_session_available(
+    session: Session,
+    client: AsyncClient,
+) -> None:
+    session.add(Workspace(name="Legacy", is_claimed=False))
+    session.commit()
+    token = await csrf(client)
+    registration = await client.post(
+        "/api/auth/register",
+        headers=protected_headers(token),
+        json={
+            "email": "expired-trial@example.com",
+            "display_name": "Expired Trial",
+            "password": "a-long-test-password",
+        },
+    )
+    assert registration.status_code == 201
+    workspace_id = registration.json()["user"]["workspace_id"]
+    user = session.scalar(select(User).where(User.email == "expired-trial@example.com"))
+    assert user is not None
+    user.email_verified_at = datetime.now(UTC)
+    workspace = session.get(Workspace, workspace_id)
+    assert workspace is not None
+    workspace.trial_ends_at = datetime.now(UTC) - timedelta(seconds=1)
+    session.commit()
+
+    financial = await client.get("/api/categories")
+    assert financial.status_code == 402
+    assert financial.json()["detail"] == "Your free trial has expired"
+
+    current = await client.get("/api/auth/session")
+    assert current.status_code == 200
+    assert current.json()["user"]["access_active"] is False
 
 
 @pytest.mark.anyio

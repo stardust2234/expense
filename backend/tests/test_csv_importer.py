@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database.base import Base
 from app.models import ImportBatch, RawTransaction
+from app.services import csv_importer
 from app.services.csv_importer import CsvImportError, import_csv
 
 
@@ -71,6 +72,21 @@ def test_malformed_csv_is_rolled_back(session: Session) -> None:
             session,
             source_filename="invalid.csv",
             stream=StringIO("Date,Description\n2026-07-01,Coffee,unexpected\n"),
+        )
+
+    assert session.scalar(select(ImportBatch)) is None
+
+
+def test_import_rejects_rows_over_the_configured_limit(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(csv_importer, "MAX_IMPORT_ROWS", 1)
+
+    with pytest.raises(CsvImportError, match="more than 1 rows"):
+        import_csv(
+            session,
+            source_filename="too-large.csv",
+            stream=StringIO("Date\n01/01/2026\n02/01/2026\n"),
         )
 
     assert session.scalar(select(ImportBatch)) is None

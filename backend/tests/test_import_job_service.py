@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -5,6 +6,40 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.models import ImportBatch
 from app.services import import_job_service
+
+
+def test_import_executor_can_restart_after_shutdown(monkeypatch) -> None:
+    created = []
+
+    class FakeExecutor:
+        def __init__(self, **_kwargs):
+            self.shutdown_calls = []
+            created.append(self)
+
+        def shutdown(self, **kwargs):
+            self.shutdown_calls.append(kwargs)
+
+    monkeypatch.setattr(import_job_service, "ThreadPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(import_job_service, "_executor", None)
+
+    first = import_job_service._get_executor()
+    import_job_service.shutdown_import_jobs()
+    second = import_job_service._get_executor()
+
+    assert second is not first
+    assert len(created) == 2
+    assert first.shutdown_calls == [{"wait": True, "cancel_futures": False}]
+
+
+def test_import_queue_rejects_work_when_capacity_is_exhausted(monkeypatch) -> None:
+    class UnavailableSlot:
+        def acquire(self, **_kwargs):
+            return False
+
+    monkeypatch.setattr(import_job_service, "_queue_slots", UnavailableSlot())
+
+    with pytest.raises(import_job_service.ImportQueueFullError):
+        import_job_service.enqueue_import_job(1)
 
 
 def test_only_one_worker_can_claim_a_queued_batch(monkeypatch) -> None:

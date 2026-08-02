@@ -20,17 +20,17 @@ class CategoryTotalsResponse(BaseModel):
     items: list[CategoryTotal]
 
 
-class MonthlyTotal(BaseModel):
-    month: str
+class PriorityTotal(BaseModel):
+    priority: str
     currency: str
     total_amount: int
     transaction_count: int
 
 
-class MonthlyReportResponse(BaseModel):
+class PriorityReportResponse(BaseModel):
     date_from: date | None
     date_to: date | None
-    items: list[MonthlyTotal]
+    items: list[PriorityTotal]
 
 
 class RecurringExpense(BaseModel):

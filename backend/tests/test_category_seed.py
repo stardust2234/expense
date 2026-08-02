@@ -59,6 +59,7 @@ def test_seed_creates_the_complete_hierarchy(session: Session) -> None:
 
 
 def test_seed_is_idempotent_and_preserves_existing_categories(session: Session) -> None:
+    expected_count = sum(1 + len(children) for _, children in CATEGORY_TAXONOMY)
     custom_housing = Category(name="Housing")
     session.add(custom_housing)
     session.commit()
@@ -67,9 +68,9 @@ def test_seed_is_idempotent_and_preserves_existing_categories(session: Session) 
     second_result = seed_categories(session)
     categories = session.scalars(select(Category)).all()
 
-    assert first_result.created == 57
+    assert first_result.created == expected_count - 1
     assert second_result.created == 0
-    assert len(categories) == 58
+    assert len(categories) == expected_count
     assert len([category for category in categories if category.name == "Housing"]) == 1
     assert custom_housing.parent_category_id is None
     assert custom_housing.default_priority is SpendingPriority.ADJUSTABLE
