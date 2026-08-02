@@ -619,7 +619,7 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
     assert preview_response.status_code == 200
     preview = preview_response.json()
     assert session.query(PaymentCycle).count() == 0
-    assert preview["income"]["payment_date"] == "2026-08-29"
+    assert preview["incomes"][0]["payment_date"] == "2026-08-28"
     assert len(preview["commitments"]) == 1
     assert len(preview["allowances"]) == 1
 
@@ -630,6 +630,7 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
             "currency": "GBP",
             "opening_balance": 10000,
             "current_balance": 9000,
+            "income_proposal_ids": [preview["incomes"][0]["proposal_id"]],
             "commitment_proposal_ids": [preview["commitments"][0]["proposal_id"]],
             "allowance_proposal_ids": [preview["allowances"][0]["proposal_id"]],
         },
@@ -641,7 +642,7 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
     assert cycle is not None
     assert cycle.start_date == date(2026, 8, 1)
     assert cycle.end_date == date(2026, 9, 1)
-    assert cycle.next_payment_date == date(2026, 8, 29)
+    assert cycle.next_payment_date == date(2026, 8, 28)
     assert cycle.expected_income_amount == 90000
     assert len(cycle.commitments) == 1
     assert cycle.commitments[0].due_date == date(2026, 8, 27)
@@ -650,6 +651,23 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
     cycle.commitments[0].amount = 49000
     session.commit()
 
+    unchanged = await client.post(
+        "/api/plan-inference/confirm",
+        json={
+            "target_month": "2026-08-01",
+            "currency": "GBP",
+            "opening_balance": 10000,
+            "current_balance": 9000,
+            "income_proposal_ids": [preview["incomes"][0]["proposal_id"]],
+            "commitment_proposal_ids": [],
+            "allowance_proposal_ids": [],
+        },
+    )
+    session.refresh(cycle)
+    assert unchanged.status_code == 201
+    assert cycle.commitments[0].amount == 49000
+    assert unchanged.json()["updated_commitment_ids"] == []
+
     repeated = await client.post(
         "/api/plan-inference/confirm",
         json={
@@ -657,6 +675,7 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
             "currency": "GBP",
             "opening_balance": 1,
             "current_balance": 2,
+            "income_proposal_ids": [preview["incomes"][0]["proposal_id"]],
             "commitment_proposal_ids": [preview["commitments"][0]["proposal_id"]],
             "allowance_proposal_ids": [],
         },
@@ -664,11 +683,12 @@ async def test_plan_inference_preview_is_read_only_and_confirmation_is_selective
     session.refresh(cycle)
     assert repeated.status_code == 201
     assert repeated.json()["created_cycle"] is False
-    assert cycle.opening_balance == 10000
-    assert cycle.current_balance == 9000
+    assert cycle.opening_balance == 1
+    assert cycle.current_balance == 2
     assert cycle.expected_income_amount == 90000
     assert len(cycle.commitments) == 1
-    assert cycle.commitments[0].amount == 49000
+    assert cycle.commitments[0].amount == 50000
+    assert repeated.json()["updated_commitment_ids"] == [cycle.commitments[0].id]
 
 
 async def _count_cycles(client: AsyncClient) -> int:

@@ -55,6 +55,7 @@ from app.services.auth_service import (
     register_user,
     revoke_session,
     rotate_csrf,
+    workspace_access_active,
 )
 from app.services.mail_service import send_account_token
 
@@ -98,6 +99,11 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 def _user_response(issued: IssuedSession, *, include_csrf: bool = True) -> AuthSessionResponse:
+    workspace = next(
+        membership.workspace
+        for membership in issued.user.memberships
+        if membership.workspace_id == issued.workspace_id
+    )
     return AuthSessionResponse(
         user=AuthenticatedUser(
             id=issued.user.id,
@@ -106,6 +112,9 @@ def _user_response(issued: IssuedSession, *, include_csrf: bool = True) -> AuthS
             is_admin=issued.user.is_admin,
             workspace_id=issued.workspace_id,
             email_verified=issued.user.email_verified_at is not None,
+            trial_ends_at=workspace.trial_ends_at,
+            access_expires_at=workspace.access_expires_at,
+            access_active=workspace_access_active(workspace),
         ),
         expires_at=issued.expires_at,
         csrf_token=issued.csrf_token if include_csrf else None,
@@ -224,6 +233,11 @@ async def login(
 
 @router.get("/session", response_model=AuthSessionResponse)
 async def current_session(auth: CurrentAuth) -> AuthSessionResponse:
+    workspace = next(
+        membership.workspace
+        for membership in auth.user.memberships
+        if membership.workspace_id == auth.workspace_id
+    )
     return AuthSessionResponse(
         user=AuthenticatedUser(
             id=auth.user.id,
@@ -232,6 +246,9 @@ async def current_session(auth: CurrentAuth) -> AuthSessionResponse:
             is_admin=auth.user.is_admin,
             workspace_id=auth.workspace_id,
             email_verified=auth.user.email_verified_at is not None,
+            trial_ends_at=workspace.trial_ends_at,
+            access_expires_at=workspace.access_expires_at,
+            access_active=workspace_access_active(workspace),
         ),
         expires_at=auth.session.expires_at,
     )

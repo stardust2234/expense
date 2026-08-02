@@ -65,9 +65,9 @@ def add_expense(
 
 
 @pytest.mark.anyio
-async def test_category_and_monthly_reports(session: Session) -> None:
-    groceries = Category(name="Groceries")
-    travel = Category(name="Travel")
+async def test_category_and_priority_reports(session: Session) -> None:
+    groceries = Category(name="Groceries", default_priority=SpendingPriority.ESSENTIAL)
+    travel = Category(name="Travel", default_priority=SpendingPriority.ADJUSTABLE)
     add_expense(
         session,
         category=groceries,
@@ -116,8 +116,8 @@ async def test_category_and_monthly_reports(session: Session) -> None:
             base_url="http://testserver",
         ) as client:
             category_response = await client.get("/api/reports/category-totals?currency=GBP")
-            monthly_response = await client.get(
-                "/api/reports/monthly?date_from=2026-01-01&date_to=2026-02-28"
+            priority_response = await client.get(
+                "/api/reports/priority-totals?date_from=2026-01-01&date_to=2026-02-28"
             )
     finally:
         app.dependency_overrides.clear()
@@ -141,22 +141,22 @@ async def test_category_and_monthly_reports(session: Session) -> None:
             "transaction_count": 1,
         },
     ]
-    assert monthly_response.status_code == 200
-    assert monthly_response.json()["items"] == [
+    assert priority_response.status_code == 200
+    assert priority_response.json()["items"] == [
         {
-            "month": "2026-01",
+            "priority": "essential",
             "currency": "GBP",
             "total_amount": 3500,
             "transaction_count": 2,
         },
         {
-            "month": "2026-02",
+            "priority": "adjustable",
             "currency": "EUR",
             "total_amount": 2000,
             "transaction_count": 1,
         },
         {
-            "month": "2026-02",
+            "priority": "adjustable",
             "currency": "GBP",
             "total_amount": 5000,
             "transaction_count": 1,
@@ -176,7 +176,7 @@ async def test_reports_reject_reversed_date_range(session: Session) -> None:
             base_url="http://testserver",
         ) as client:
             response = await client.get(
-                "/api/reports/monthly?date_from=2026-02-01&date_to=2026-01-01"
+                "/api/reports/priority-totals?date_from=2026-02-01&date_to=2026-01-01"
             )
     finally:
         app.dependency_overrides.clear()
@@ -283,7 +283,7 @@ async def test_cash_flow_excludes_transfers_and_nets_refunds_and_income(
             base_url="http://testserver",
         ) as client:
             categories = await client.get("/api/reports/category-totals?currency=GBP")
-            monthly = await client.get("/api/reports/monthly?currency=GBP")
+            priorities = await client.get("/api/reports/priority-totals?currency=GBP")
     finally:
         app.dependency_overrides.clear()
 
@@ -297,9 +297,9 @@ async def test_cash_flow_excludes_transfers_and_nets_refunds_and_income(
             "transaction_count": 2,
         }
     ]
-    assert monthly.json()["items"] == [
+    assert priorities.json()["items"] == [
         {
-            "month": "2026-06",
+            "priority": "adjustable",
             "currency": "GBP",
             "total_amount": 9_000,
             "transaction_count": 2,

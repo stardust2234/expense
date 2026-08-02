@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n, setAppLocale } from "../i18n";
 
 const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-const routeMock = vi.hoisted(() => ({ query: {} as Record<string, string> }));
+const routeMock = vi.hoisted(() => ({ name: "login", query: {} as Record<string, string> }));
 const apiMock = vi.hoisted(() => ({
   bootstrapStatus: vi.fn().mockResolvedValue({ required: false }),
   login: vi.fn(),
@@ -37,11 +37,20 @@ async function render(component: object, locale: "en" | "fr" = "en") {
 afterEach(() => {
   document.body.innerHTML = "";
   routeMock.query = {};
+  routeMock.name = "login";
   setAppLocale("en");
   vi.clearAllMocks();
 });
 
 describe("authentication views", () => {
+  it("opens registration mode from the register route", async () => {
+    routeMock.name = "register";
+    const host = await render(LoginView);
+
+    expect(host.textContent).toContain("Create your account");
+    expect(host.querySelector('input[autocomplete="name"]')).not.toBeNull();
+  });
+
   it("allows a reset email to be requested from login", async () => {
     const host = await render(LoginView);
     const email = host.querySelector('input[type="email"]') as HTMLInputElement;

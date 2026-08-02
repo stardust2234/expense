@@ -13,10 +13,10 @@ from app.models import Expense, TransactionStatus
 from app.schemas.reports import (
     CategoryTotal,
     CategoryTotalsResponse,
-    MonthlyReportResponse,
-    MonthlyTotal,
     PaymentPeriod,
     PaymentPeriodReportResponse,
+    PriorityReportResponse,
+    PriorityTotal,
     RecurringExpense,
     RecurringOpportunity,
     RecurringOpportunityResponse,
@@ -31,7 +31,12 @@ from app.services.recurring_report_service import (
     get_recurring_opportunities,
     save_recurring_opportunity,
 )
-from app.services.report_query_service import get_category_totals, get_monthly_totals
+from app.services.report_query_service import (
+    MAX_REPORT_ROWS,
+    get_category_totals,
+    get_priority_totals,
+    validate_date_range,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
@@ -75,15 +80,15 @@ async def category_totals(
     )
 
 
-@router.get("/monthly", response_model=MonthlyReportResponse)
-async def monthly_totals(
+@router.get("/priority-totals", response_model=PriorityReportResponse)
+async def priority_totals(
     session: DatabaseSession,
     date_from: date | None = None,
     date_to: date | None = None,
     currency: CurrencyQuery = None,
-) -> MonthlyReportResponse:
+) -> PriorityReportResponse:
     try:
-        records = get_monthly_totals(
+        records = get_priority_totals(
             session,
             date_from=date_from,
             date_to=date_to,
@@ -91,10 +96,10 @@ async def monthly_totals(
         )
     except ValueError as error:
         raise _bad_date_range(error) from error
-    return MonthlyReportResponse(
+    return PriorityReportResponse(
         date_from=date_from,
         date_to=date_to,
-        items=[MonthlyTotal(**record.__dict__) for record in records],
+        items=[PriorityTotal(**record.__dict__) for record in records],
     )
 
 
@@ -124,7 +129,10 @@ async def payment_periods(
     session: DatabaseSession,
     currency: CurrencyQuery = None,
 ) -> PaymentPeriodReportResponse:
-    records = get_payment_periods(session, currency=currency)
+    try:
+        records = get_payment_periods(session, currency=currency)
+    except ValueError as error:
+        raise _bad_date_range(error) from error
     return PaymentPeriodReportResponse(
         items=[PaymentPeriod(**record.__dict__) for record in records]
     )
@@ -217,8 +225,10 @@ async def export_transactions(
     date_to: date | None = None,
     currency: CurrencyQuery = None,
 ) -> Response:
-    if date_from is not None and date_to is not None and date_from > date_to:
-        raise _bad_date_range(ValueError("date_from must be on or before date_to"))
+    try:
+        validate_date_range(date_from, date_to)
+    except ValueError as error:
+        raise _bad_date_range(error) from error
     statement = select(Expense).where(Expense.status == TransactionStatus.CATEGORISED)
     if date_from is not None:
         statement = statement.where(Expense.transaction_date >= date_from)
@@ -226,7 +236,17 @@ async def export_transactions(
         statement = statement.where(Expense.transaction_date <= date_to)
     if currency is not None:
         statement = statement.where(Expense.currency == currency.upper())
-    expenses = session.scalars(statement.order_by(Expense.transaction_date, Expense.id)).all()
+    expenses = session.scalars(
+        statement.order_by(Expense.transaction_date, Expense.id).limit(MAX_REPORT_ROWS + 1)
+    ).all()
+    if len(expenses) > MAX_REPORT_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Export contains more than {MAX_REPORT_ROWS} transactions; "
+                "use a narrower date range"
+            ),
+        )
     headers = ["date", "description", "amount_minor", "currency", "category_id", "merchant_id"]
     rows = [
         [

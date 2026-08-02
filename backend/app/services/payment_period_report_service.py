@@ -2,11 +2,14 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Category, Expense, PaymentCycle, SpendingPriority, TransactionStatus
 from app.services.cash_flow import CashFlowKind, cash_flow_kind, spending_contribution
+from app.services.report_query_service import MAX_REPORT_ROWS
+
+MAX_PAYMENT_PERIODS = 240
 
 
 @dataclass(frozen=True)
@@ -32,13 +35,28 @@ class PaymentPeriodRecord:
 def get_payment_periods(
     session: Session, *, currency: str | None = None
 ) -> list[PaymentPeriodRecord]:
+    cycle_filter = []
+    if currency is not None:
+        cycle_filter.append(PaymentCycle.currency == currency.upper())
+    cycle_count = session.scalar(select(func.count(PaymentCycle.id)).where(*cycle_filter)) or 0
+    if cycle_count > MAX_PAYMENT_PERIODS:
+        raise ValueError(f"Payment-period report contains more than {MAX_PAYMENT_PERIODS} periods")
+    expense_count = (
+        session.scalar(
+            select(func.count(Expense.id))
+            .join(PaymentCycle, Expense.payment_cycle_id == PaymentCycle.id)
+            .where(*cycle_filter)
+        )
+        or 0
+    )
+    if expense_count > MAX_REPORT_ROWS:
+        raise ValueError(f"Payment-period report contains more than {MAX_REPORT_ROWS} transactions")
     statement = select(PaymentCycle).options(
         selectinload(PaymentCycle.expenses)
         .selectinload(Expense.category)
         .selectinload(Category.parent)
     )
-    if currency is not None:
-        statement = statement.where(PaymentCycle.currency == currency.upper())
+    statement = statement.where(*cycle_filter)
     records: list[PaymentPeriodRecord] = []
     for cycle in session.scalars(
         statement.order_by(PaymentCycle.start_date, PaymentCycle.id)

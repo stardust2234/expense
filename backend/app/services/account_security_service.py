@@ -43,17 +43,21 @@ def issue_token(session: Session, *, user: User, purpose: str, minutes: int) -> 
 
 
 def consume_token(session: Session, *, raw: str, purpose: str) -> User:
-    token = session.scalar(
-        select(AccountToken).where(
+    now = datetime.now(UTC)
+    user_id = session.scalar(
+        update(AccountToken)
+        .where(
             AccountToken.token_hash == sha256(raw.encode()).hexdigest(),
             AccountToken.purpose == purpose,
             AccountToken.used_at.is_(None),
+            AccountToken.expires_at > now,
         )
+        .values(used_at=now)
+        .returning(AccountToken.user_id)
     )
-    if token is None or _aware(token.expires_at) <= datetime.now(UTC):
+    if user_id is None:
         raise AccountTokenError("Token is invalid or expired")
-    token.used_at = datetime.now(UTC)
-    user = session.get(User, token.user_id)
+    user = session.get(User, user_id)
     if user is None:
         raise AccountTokenError("Token is invalid or expired")
     return user

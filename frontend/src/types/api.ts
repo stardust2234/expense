@@ -66,8 +66,8 @@ export type CategoryTotal = {
   transaction_count: number;
 };
 
-export type MonthlyTotal = {
-  month: string;
+export type PriorityTotal = {
+  priority: SpendingPriority;
   currency: string;
   total_amount: number;
   transaction_count: number;
@@ -173,16 +173,21 @@ export type SafeSpendingForecast = {
 
 export type InferredIncome = {
   proposal_id: string;
+  identity_key: string;
   description: string;
   expected_amount: number;
+  nominal_payment_date: string;
   payment_date: string;
+  date_adjusted: boolean;
   occurrence_count: number;
   confidence: number;
   evidence_transaction_ids: number[];
+  state: "new" | "unchanged" | "changed";
 };
 
 export type InferredCommitment = {
   proposal_id: string;
+  identity_key: string;
   name: string;
   amount: number;
   due_date: string;
@@ -193,10 +198,13 @@ export type InferredCommitment = {
   occurrence_count: number;
   confidence: number;
   evidence_transaction_ids: number[];
+  state: "new" | "unchanged" | "changed";
+  existing_id: number | null;
 };
 
 export type InferredAllowance = {
   proposal_id: string;
+  identity_key: string;
   name: string;
   allowance_type: AllowanceType;
   amount: number;
@@ -206,15 +214,24 @@ export type InferredAllowance = {
   months_observed: number;
   confidence: number;
   evidence_transaction_ids: number[];
+  state: "new" | "unchanged" | "changed";
+  existing_id: number | null;
 };
 
 export type PlanInferencePreview = {
   target_month: string;
   end_date: string;
   currency: string;
-  income: InferredIncome;
+  incomes: InferredIncome[];
   commitments: InferredCommitment[];
   allowances: InferredAllowance[];
+  impact: {
+    expected_income: number;
+    commitments: number;
+    essential_allowances: number;
+    net_before_balance: number;
+    period_days: number;
+  };
 };
 
 export type Transaction = {
@@ -296,6 +313,9 @@ export interface AuthUser {
   is_admin: boolean;
   workspace_id: number;
   email_verified: boolean;
+  trial_ends_at: string;
+  access_expires_at: string | null;
+  access_active: boolean;
 }
 
 export interface AuthSession {

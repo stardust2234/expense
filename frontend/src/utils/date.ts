@@ -17,16 +17,6 @@ export function formatUkDate(value: string): string {
   }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
 }
 
-export function formatUkMonth(value: string): string {
-  const match = /^(\d{4})-(\d{2})$/.exec(value);
-  if (!match) return value;
-  return new Intl.DateTimeFormat(localeTag(), {
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)));
-}
-
 export function inclusiveCycleEnd(exclusiveEnd: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(exclusiveEnd);
   if (!match) return exclusiveEnd;

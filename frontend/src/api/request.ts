@@ -41,6 +41,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (response.status === 401 && !path.startsWith("/auth/") && typeof window !== "undefined") {
     window.dispatchEvent(new Event("folio:unauthorised"));
   }
+  if (response.status === 402 && !path.startsWith("/auth/") && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("folio:access-expired"));
+  }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {

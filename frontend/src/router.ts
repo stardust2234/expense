@@ -10,8 +10,20 @@ import { auth } from "./auth";
 
 export const routes: RouteRecordRaw[] = [
   {
+    path: "/",
+    name: "landing",
+    component: () => import("./views/LandingView.vue"),
+    meta: { public: true, authLayout: true },
+  },
+  {
     path: "/login",
     name: "login",
+    component: () => import("./views/LoginView.vue"),
+    meta: { public: true, authLayout: true },
+  },
+  {
+    path: "/register",
+    name: "register",
     component: () => import("./views/LoginView.vue"),
     meta: { public: true, authLayout: true },
   },
@@ -63,7 +75,6 @@ export const routes: RouteRecordRaw[] = [
     name: "reports",
     component: () => import("./views/ReportsView.vue"),
   },
-  { path: "/", redirect: "/dashboard" },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
@@ -72,6 +83,9 @@ export function createAppRouter(
   sessionGuard: () => Promise<boolean> = () => auth.ensureSession(),
 ): Router {
   const router = createRouter({ history, routes });
+  router.onError((error, to) => {
+    console.error(`Route navigation to ${to.fullPath} failed`, error);
+  });
   router.beforeEach(async (to) => {
     const authenticated = await sessionGuard();
     if (!to.meta.public && !authenticated) {
@@ -80,7 +94,17 @@ export function createAppRouter(
     if (!to.meta.public && authenticated && auth.user.value?.email_verified === false) {
       return { name: "verify-email" };
     }
-    if (to.name === "login" && authenticated) return { name: "dashboard" };
+    if (
+      !to.meta.public
+      && to.name !== "account"
+      && authenticated
+      && auth.user.value?.access_active === false
+    ) {
+      return { name: "landing", hash: "#pricing", query: { trial: "expired" } };
+    }
+    if ((to.name === "login" || to.name === "register") && authenticated) {
+      return { name: "dashboard" };
+    }
     return true;
   });
   return router;

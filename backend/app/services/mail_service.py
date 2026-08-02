@@ -1,5 +1,6 @@
 import logging
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 from app.config import Settings
@@ -22,7 +23,7 @@ def send_account_token(settings: Settings, *, email: str, purpose: str, token: s
     message["Subject"] = "Verify your Folio email" if verification else "Reset your Folio password"
     message.set_content(f"Open this single-use link within one hour:\n\n{link}\n")
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-        smtp.starttls()
+        smtp.starttls(context=ssl.create_default_context())
         if settings.smtp_username:
             smtp.login(settings.smtp_username, settings.smtp_password or "")
         smtp.send_message(message)

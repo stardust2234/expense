@@ -1,8 +1,8 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import asyncio
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
-from fastapi import Depends, FastAPI
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, FastAPI
 
 from app.api.auth_dependencies import require_workspace_request
 from app.api.routes.auth import router as auth_router
@@ -15,37 +15,56 @@ from app.api.routes.reports import router as reports_router
 from app.api.routes.review_queue import router as review_queue_router
 from app.api.routes.rules import router as rules_router
 from app.api.routes.transactions import router as transactions_router
-from app.config import get_settings
-from app.database.session import SessionLocal
-from app.models import Workspace
-from app.services.commitment_reconciliation import reconcile_pending_commitments
-from app.services.import_job_service import resume_incomplete_import_jobs
+from app.config import Settings, get_settings
+from app.services.import_job_service import shutdown_import_jobs
+from app.services.startup_maintenance import run_startup_maintenance
 
-settings = get_settings()
+Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    with SessionLocal() as session:
-        workspace_ids = session.scalars(select(Workspace.id)).all()
-    for workspace_id in workspace_ids:
-        with SessionLocal() as session:
-            session.info["workspace_id"] = workspace_id
-            reconcile_pending_commitments(session)
-            session.commit()
-    resume_incomplete_import_jobs()
-    yield
+def create_lifespan(
+    *,
+    startup: Callable[[], object] = run_startup_maintenance,
+    shutdown: Callable[[], None] = shutdown_import_jobs,
+) -> Lifespan:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.startup_maintenance = await asyncio.to_thread(startup)
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(shutdown)
+
+    return lifespan
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
-app.include_router(auth_router, prefix="/api")
-protected = [Depends(require_workspace_request)]
-app.include_router(categories_router, prefix="/api", dependencies=protected)
-app.include_router(health_router, prefix="/api")
-app.include_router(imports_router, prefix="/api", dependencies=protected)
-app.include_router(merchants_router, prefix="/api", dependencies=protected)
-app.include_router(payment_cycles_router, prefix="/api", dependencies=protected)
-app.include_router(review_queue_router, prefix="/api", dependencies=protected)
-app.include_router(rules_router, prefix="/api", dependencies=protected)
-app.include_router(transactions_router, prefix="/api", dependencies=protected)
-app.include_router(reports_router, prefix="/api", dependencies=protected)
+def create_app(
+    app_settings: Settings | None = None,
+    *,
+    lifespan: Lifespan | None = None,
+) -> FastAPI:
+    settings = app_settings or get_settings()
+    application = FastAPI(
+        title=settings.app_name,
+        lifespan=lifespan or create_lifespan(),
+    )
+    application.include_router(auth_router, prefix="/api")
+    application.include_router(health_router, prefix="/api")
+
+    protected = APIRouter(dependencies=[Depends(require_workspace_request)])
+    for router in (
+        categories_router,
+        imports_router,
+        merchants_router,
+        payment_cycles_router,
+        review_queue_router,
+        rules_router,
+        transactions_router,
+        reports_router,
+    ):
+        protected.include_router(router)
+    application.include_router(protected, prefix="/api")
+    return application
+
+
+app = create_app()

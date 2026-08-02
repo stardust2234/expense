@@ -8,7 +8,7 @@ import type {
   ImportBatch,
   Merchant,
   MerchantAlias,
-  MonthlyTotal,
+  PriorityTotal,
   PaymentPeriod,
   PaymentCycle,
   PlanInferencePreview,
@@ -22,7 +22,7 @@ import type {
 } from "../types/api";
 
 import { authApi } from "./auth";
-import { apiBaseUrl, request } from "./request";
+import { request } from "./request";
 export { ApiError, resetApiSecurityState } from "./request";
 
 export const api = {
@@ -107,8 +107,8 @@ export const api = {
       )
     ).items,
 
-  monthlyTotals: async (params: URLSearchParams) =>
-    (await request<{ items: MonthlyTotal[] }>(`/reports/monthly?${params.toString()}`))
+  priorityTotals: async (params: URLSearchParams) =>
+    (await request<{ items: PriorityTotal[] }>(`/reports/priority-totals?${params.toString()}`))
       .items,
   recurringExpenses: async (params: URLSearchParams) =>
     (await request<{ items: RecurringExpense[] }>(`/reports/recurring?${params}`)).items,
@@ -147,12 +147,6 @@ export const api = {
     request<void>(`/reports/recurring-opportunities/${id}`, {
       method: "DELETE",
     }),
-  exportUrl: (format: "csv" | "xlsx", filters = new URLSearchParams()) => {
-    const params = new URLSearchParams(filters);
-    params.set("format", format);
-    return `${apiBaseUrl}/reports/export?${params}`;
-  },
-
   paymentCycles: (limit = 100, offset = 0) =>
     request<{ items: PaymentCycle[]; total: number; limit: number; offset: number }>(
       `/payment-cycles?limit=${limit}&offset=${offset}`,
@@ -284,6 +278,7 @@ export const api = {
     currency: string;
     opening_balance: number;
     current_balance: number | null;
+    income_proposal_ids: string[];
     commitment_proposal_ids: string[];
     allowance_proposal_ids: string[];
   }) =>
@@ -291,7 +286,9 @@ export const api = {
       payment_cycle_id: number;
       created_cycle: boolean;
       created_commitment_ids: number[];
+      updated_commitment_ids: number[];
       created_allowance_ids: number[];
+      updated_allowance_ids: number[];
     }>("/plan-inference/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -9,7 +9,7 @@ import { auth } from "../auth";
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
-const registering = ref(false);
+const registering = ref(route.name === "register");
 const email = ref("");
 const displayName = ref("");
 const password = ref("");
@@ -72,6 +72,12 @@ async function requestReset() {
   }
 }
 
+async function toggleMode() {
+  error.value = "";
+  await router.replace({ name: registering.value ? "login" : "register" });
+  registering.value = !registering.value;
+}
+
 onMounted(async () => {
   try {
     bootstrapRequired.value = (await api.bootstrapStatus()).required;
@@ -130,7 +136,7 @@ onMounted(async () => {
       <button v-if="!registering" class="text-action" type="button" @click="requestReset">
         {{ t("passwordReset.forgot") }}
       </button>
-      <button class="text-action" type="button" @click="registering = !registering; error = ''">
+      <button class="text-action" type="button" @click="toggleMode">
         {{ registering ? t("auth.haveAccount") : t("auth.needAccount") }}
       </button>
     </section>

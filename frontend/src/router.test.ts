@@ -1,14 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMemoryHistory } from "vue-router";
 
 import { createAppRouter, routes } from "./router";
+import { auth } from "./auth";
 
 describe("application routes", () => {
   it("defines a named route for every workspace area", () => {
     expect(
       routes.filter((route) => route.name).map((route) => route.path),
     ).toEqual([
+      "/",
       "/login",
+      "/register",
       "/verify-email",
       "/reset-password",
       "/dashboard",
@@ -22,6 +25,14 @@ describe("application routes", () => {
       "/categories",
       "/reports",
     ]);
+  });
+
+  it("keeps the landing, login, and registration pages public", async () => {
+    const router = createAppRouter(createMemoryHistory(), async () => false);
+    await router.push("/");
+    expect(router.currentRoute.value.name).toBe("landing");
+    await router.push("/register");
+    expect(router.currentRoute.value.name).toBe("register");
   });
 
   it("navigates directly to a workspace URL", async () => {
@@ -46,6 +57,40 @@ describe("application routes", () => {
 
     expect(router.currentRoute.value.name).toBe("login");
     expect(router.currentRoute.value.query.redirect).toBe("/reports");
+  });
+
+  it("redirects an expired trial to pricing but leaves account access available", async () => {
+    auth.setSession({
+      id: 1,
+      email: "person@example.com",
+      display_name: "Person",
+      is_admin: false,
+      workspace_id: 1,
+      email_verified: true,
+      trial_ends_at: "2026-01-01T00:00:00Z",
+      access_expires_at: null,
+      access_active: false,
+    });
+    const router = createAppRouter(createMemoryHistory(), async () => true);
+
+    await router.push("/reports");
+    expect(router.currentRoute.value.name).toBe("landing");
+    expect(router.currentRoute.value.hash).toBe("#pricing");
+
+    await router.push("/account");
+    expect(router.currentRoute.value.name).toBe("account");
+    auth.setSession({ ...auth.user.value!, access_active: true });
+  });
+
+  it("handles errors raised while checking a route session", async () => {
+    const error = new Error("Session service unavailable");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const router = createAppRouter(createMemoryHistory(), async () => Promise.reject(error));
+
+    await expect(router.push("/reports")).rejects.toThrow("Session service unavailable");
+
+    expect(consoleError).toHaveBeenCalledWith("Route navigation to /reports failed", error);
+    consoleError.mockRestore();
   });
 });
 

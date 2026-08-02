@@ -12,6 +12,7 @@ from app.services.auth_service import (
     SESSION_COOKIE,
     get_auth_session,
     verify_csrf,
+    workspace_access_active,
 )
 
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
@@ -63,6 +64,18 @@ async def require_workspace_request(
 ) -> AuthContext:
     if auth.user.email_verified_at is None:
         raise HTTPException(status_code=403, detail="Email verification required")
+    workspace = next(
+        (
+            membership.workspace
+            for membership in auth.user.memberships
+            if membership.workspace_id == auth.workspace_id
+        ),
+        None,
+    )
+    if workspace is None:
+        raise HTTPException(status_code=403, detail="Workspace access is unavailable")
+    if not workspace_access_active(workspace):
+        raise HTTPException(status_code=402, detail="Your free trial has expired")
     database.info["workspace_id"] = auth.workspace_id
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         header_token = request.headers.get(CSRF_HEADER)

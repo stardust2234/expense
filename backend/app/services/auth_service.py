@@ -9,7 +9,8 @@ from secrets import token_urlsafe
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -57,6 +58,17 @@ class IssuedSession:
 
 def _hash_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
+
+
+def workspace_access_ends_at(workspace: Workspace) -> datetime:
+    trial_end = _aware(workspace.trial_ends_at)
+    if workspace.access_expires_at is None:
+        return trial_end
+    return max(trial_end, _aware(workspace.access_expires_at))
+
+
+def workspace_access_active(workspace: Workspace, *, now: datetime | None = None) -> bool:
+    return workspace_access_ends_at(workspace) > (now or datetime.now(UTC))
 
 
 def register_user(
@@ -195,7 +207,11 @@ def get_auth_session(session: Session, raw_token: str | None) -> tuple[AuthSessi
     auth_session = session.scalar(
         select(AuthSession)
         .where(AuthSession.token_hash == _hash_token(raw_token))
-        .options(selectinload(AuthSession.user).selectinload(User.memberships))
+        .options(
+            selectinload(AuthSession.user)
+            .selectinload(User.memberships)
+            .selectinload(WorkspaceMembership.workspace)
+        )
     )
     now = datetime.now(UTC)
     if auth_session is None or auth_session.revoked_at is not None:
@@ -236,20 +252,33 @@ def login_throttle_key(*, email: str, client_ip: str, secret: str) -> str:
 def enforce_registration_throttle(session: Session, *, client_ip: str, secret: str) -> None:
     key = hmac_new(secret.encode(), client_ip.encode(), sha256).hexdigest()
     now = datetime.now(UTC)
-    row = session.scalar(select(RegistrationThrottle).where(RegistrationThrottle.key_hash == key))
-    if row and row.blocked_until and _aware(row.blocked_until) > now:
-        raise LoginThrottledError("Too many registration attempts; try again later")
-    if row is None:
-        row = RegistrationThrottle(key_hash=key, attempts=0, window_started_at=now)
-        session.add(row)
-    elif _aware(row.window_started_at) <= now - timedelta(hours=1):
-        row.attempts = 0
-        row.window_started_at = now
-        row.blocked_until = None
-    row.attempts += 1
-    if row.attempts >= 5:
-        row.blocked_until = now + timedelta(hours=1)
+    window_start = now - timedelta(hours=1)
+    blocked_until = now + timedelta(hours=1)
+    statement = sqlite_insert(RegistrationThrottle).values(
+        key_hash=key, attempts=1, window_started_at=now, blocked_until=None
+    )
+    statement = statement.on_conflict_do_update(
+        index_elements=[RegistrationThrottle.key_hash],
+        set_={
+            "attempts": case(
+                (RegistrationThrottle.window_started_at <= window_start, 1),
+                else_=RegistrationThrottle.attempts + 1,
+            ),
+            "window_started_at": case(
+                (RegistrationThrottle.window_started_at <= window_start, now),
+                else_=RegistrationThrottle.window_started_at,
+            ),
+            "blocked_until": case(
+                (RegistrationThrottle.window_started_at <= window_start, None),
+                (RegistrationThrottle.attempts + 1 >= 5, blocked_until),
+                else_=RegistrationThrottle.blocked_until,
+            ),
+        },
+    ).returning(RegistrationThrottle.attempts, RegistrationThrottle.blocked_until)
+    attempts, blocked = session.execute(statement).one()
     session.commit()
+    if attempts >= 5 or (blocked is not None and _aware(blocked) > now):
+        raise LoginThrottledError("Too many registration attempts; try again later")
 
 
 def _aware(value: datetime) -> datetime:
@@ -268,17 +297,30 @@ def _check_login_throttle(session: Session, key_hash: str) -> None:
 
 def _record_login_failure(session: Session, key_hash: str) -> None:
     now = datetime.now(UTC)
-    throttle = session.scalar(select(LoginThrottle).where(LoginThrottle.key_hash == key_hash))
-    if throttle is None:
-        throttle = LoginThrottle(key_hash=key_hash, failed_attempts=0, window_started_at=now)
-        session.add(throttle)
-    elif _aware(throttle.window_started_at) <= now - timedelta(minutes=15):
-        throttle.failed_attempts = 0
-        throttle.window_started_at = now
-        throttle.blocked_until = None
-    throttle.failed_attempts += 1
-    if throttle.failed_attempts >= 5:
-        throttle.blocked_until = now + timedelta(minutes=15)
+    window_start = now - timedelta(minutes=15)
+    blocked_until = now + timedelta(minutes=15)
+    statement = sqlite_insert(LoginThrottle).values(
+        key_hash=key_hash, failed_attempts=1, window_started_at=now, blocked_until=None
+    )
+    statement = statement.on_conflict_do_update(
+        index_elements=[LoginThrottle.key_hash],
+        set_={
+            "failed_attempts": case(
+                (LoginThrottle.window_started_at <= window_start, 1),
+                else_=LoginThrottle.failed_attempts + 1,
+            ),
+            "window_started_at": case(
+                (LoginThrottle.window_started_at <= window_start, now),
+                else_=LoginThrottle.window_started_at,
+            ),
+            "blocked_until": case(
+                (LoginThrottle.window_started_at <= window_start, None),
+                (LoginThrottle.failed_attempts + 1 >= 5, blocked_until),
+                else_=LoginThrottle.blocked_until,
+            ),
+        },
+    )
+    session.execute(statement)
     session.commit()
 
 

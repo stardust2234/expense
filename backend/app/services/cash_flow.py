@@ -19,11 +19,21 @@ def root_category_name(category: Category) -> str:
     return current.name
 
 
+def root_category_code(category: Category) -> str | None:
+    current = category
+    visited: set[int] = set()
+    while current.parent is not None and current.id not in visited:
+        visited.add(current.id)
+        current = current.parent
+    return current.code
+
+
 def cash_flow_kind(category: Category) -> CashFlowKind:
-    root_name = root_category_name(category).casefold()
-    if root_name == "income":
+    root_code = root_category_code(category)
+    root_identity = root_code or root_category_name(category).casefold()
+    if root_identity == "income":
         return CashFlowKind.INCOME
-    if root_name in {"transfers", "savings and investments"}:
+    if root_identity in {"transfers", "savings_and_investments", "savings and investments"}:
         return CashFlowKind.TRANSFER
     return CashFlowKind.SPENDING
 

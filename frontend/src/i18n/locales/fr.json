@@ -5,6 +5,38 @@
     "tagline": "Rendez chaque transaction explicable.",
     "localWorkspace": "Espace local"
   },
+  "landing": {
+    "navigation": "Navigation de la page d’accueil",
+    "nav": { "about": "À propos", "features": "Fonctionnalités", "pricing": "Tarifs" },
+    "register": "S’inscrire",
+    "kicker": "De la clarté avant chaque décision",
+    "heroTitle": "Sachez combien vous pouvez dépenser sans risque.",
+    "heroCopy": "Folio transforme vos transactions bancaires en plan pratique : dépenses engagées, budget flexible et économies possibles, sans approximation.",
+    "startTrial": "Commencer l’essai gratuit de 30 jours",
+    "explore": "Découvrir les fonctionnalités",
+    "noCard": "Aucun prélèvement pendant 30 jours",
+    "expired": "Votre essai gratuit de 30 jours est terminé. Les fonctions financières sont suspendues.",
+    "manageAccount": "Gérer le compte",
+    "preview": { "safe": "Budget disponible cette semaine", "until": "jusqu’au prochain revenu", "essential": "Dépenses essentielles restantes", "outlook": "Solde prévu en fin de période", "onTrack": "Votre budget est sur la bonne voie", "risk": "Aucun risque immédiat de dépassement" },
+    "featuresKicker": "Conçu autour de vos flux réels",
+    "featuresTitle": "Du relevé bancaire au budget",
+    "featuresCopy": "Automatisez les tâches répétitives tout en gardant le contrôle de chaque décision financière importante.",
+    "features": {
+      "import": { "title": "Importer vos relevés", "copy": "Importez des fichiers CSV, Excel et PDF compatibles avec protection contre les doublons." },
+      "categorise": { "title": "Expliquer chaque paiement", "copy": "Identifiez les marchands, appliquez vos règles et vérifiez les transactions incertaines." },
+      "plan": { "title": "Planifier autour des revenus", "copy": "Protégez factures et dépenses essentielles avant de calculer un budget hebdomadaire réaliste." },
+      "reports": { "title": "Trouver des économies", "copy": "Comparez les priorités et repérez les dépenses récurrentes à réexaminer." }
+    },
+    "pricingKicker": "Tarification simple",
+    "pricingTitle": "Essayez toutes les fonctionnalités gratuitement pendant 30 jours",
+    "pricingCopy": "Une formule unique avec toutes les fonctionnalités Folio. Continuez seulement si elle vous aide à garder le contrôle.",
+    "planName": "Accès mensuel Folio",
+    "month": "mois",
+    "trial": "Essai gratuit de 30 jours inclus",
+    "benefits": { "imports": "Importation et catégorisation des relevés", "plan": "Planification du budget disponible", "reports": "Rapports et analyse des dépenses récurrentes", "workspace": "Espace personnel privé" },
+    "afterTrial": "5,99 € par mois après votre essai gratuit.",
+    "footer": "Rendez chaque transaction explicable."
+  },
   "auth": {
     "eyebrow": "Espace privé",
     "loginTitle": "Se connecter à Folio",
@@ -156,7 +188,10 @@
     "liquidity": "Liquidités Folio",
     "usableBalance": "Solde actuellement disponible",
     "balanceSnapshot": "Solde {source}",
-    "balanceSources": { "current": "actuel", "opening": "initial" },
+    "balanceSources": {
+      "current": "actuel",
+      "opening": "initial"
+    },
     "cycleEnded": "Période terminée",
     "incomeToday": "Revenu attendu aujourd’hui",
     "nextIncome": "Prochain revenu",
@@ -182,32 +217,344 @@
     "loadError": "Impossible de charger le tableau de bord"
   },
   "views": {
-    "import": { "eyebrow":"Commencez ici","title":"Importer des transactions","subtitle":"Importez un fichier CSV, Excel ou un PDF texte. Chaque ligne source est conservée avant nettoyage.","choose":"Choisir un relevé bancaire","types":"CSV, XLSX ou PDF texte · 10 Mio maximum","fallbackCurrency":"Devise par défaut","queueing":"Mise en file…","running":"Traitement en cours…","submit":"Importer et catégoriser","imported":"Importées","normalised":"Normalisées","categorised":"Catégorisées","review":"À vérifier","history":"Historique des imports","batches":"{count} lots","empty":"Aucun relevé importé.","file":"Fichier","rows":"Lignes","outcome":"Résultat","retrying":"Nouvelle tentative…","retry":"Réessayer les lignes échouées","deleting":"Suppression…","delete":"Supprimer l’import","errors":{"history":"Impossible de charger l’historique des imports","refresh":"Impossible d’actualiser le statut de l’import","upload":"Échec de l’import","retry":"Impossible de relancer l’import","delete":"Impossible de supprimer l’import"}},
-    "review": { "eyebrow":"Validation humaine","title":"File de vérification","subtitle":"Choisissez une catégorie et enregistrez une règle réutilisable en une seule étape.","waiting":"en attente","loading":"Chargement de la file…","caughtUp":"Tout est à jour","empty":"Aucune transaction ne nécessite de vérification.","merchantUnknown":"Commerçant non identifié","selectCategory":"Choisir une catégorie","saveRule":"Enregistrer la règle de correspondance","saving":"Enregistrement…","assign":"Attribuer et enregistrer la règle","previous":"Précédent","next":"Suivant","page":"Page {page} sur {pages} · {count} en attente","pages":"Pages de la file de vérification","other":"Autres","errors":{"load":"Impossible de charger la file de vérification","save":"Impossible d’enregistrer la correction"}},
-    "transactions": { "eyebrow":"Registre","title":"Transactions","subtitle":"Recherchez, filtrez et attribuez une catégorie à plusieurs transactions.","search":"Rechercher","searchPlaceholder":"Commerçant ou description","all":"Toutes","merchant":"Commerçant","from":"Du","to":"Au","batch":"Lot d’import","applyFilters":"Appliquer les filtres","selected":"{selected} sélectionnées · {total} au total","chooseCategory":"Choisir une catégorie","applyCategory":"Appliquer la catégorie","date":"Date","description":"Description","total":"Total","loading":"Chargement des transactions…","empty":"Aucune transaction ne correspond à ces filtres.","previous":"Précédent","next":"Suivant","page":"Page {page} sur {pages} · {count} transactions","pages":"Pages des transactions","statuses":{"categorised":"Catégorisée","needs_review":"À vérifier","normalised":"Normalisée"},"errors":{"load":"Impossible de charger les transactions","update":"Impossible de modifier les transactions","filters":"Impossible de charger les filtres"}},
-    "rules": { "eyebrow":"Automatisation","title":"Règles","subtitle":"Les motifs de priorité supérieure sont évalués en premier.","pattern":"Motif","matches":"Correspondances","enabled":"Active","delete":"Supprimer","deleteConfirm":"Supprimer la règle « {pattern} » ?","errors":{"load":"Impossible de charger les règles","save":"Impossible d’enregistrer la règle","delete":"Impossible de supprimer la règle"}},
-    "merchants": { "eyebrow":"Améliorer la reconnaissance","title":"Commerçants","subtitle":"Les alias relient les descriptions bancaires à un commerçant unique.","name":"Nom du commerçant","aliases":"Alias initiaux","adding":"Ajout…","addMerchant":"Ajouter le commerçant","loading":"Chargement des commerçants…","empty":"Aucun commerçant configuré.","removeAlias":"Supprimer l’alias","noAliases":"Aucun alias","aliasPlaceholder":"Ajouter un alias de description bancaire","add":"Ajouter","mergeInto":"Fusionner une variante dans {name}","merge":"Fusionner","mergeConfirm":"Fusionner le commerçant sélectionné et toutes ses transactions ?","errors":{"load":"Impossible de charger les commerçants","create":"Impossible de créer le commerçant","addAlias":"Impossible d’ajouter l’alias","removeAlias":"Impossible de supprimer l’alias","merge":"Impossible de fusionner les commerçants"}},
-    "categoryManager": { "eyebrow":"Taxonomie","title":"Catégories","subtitle":"Gérez la hiérarchie utilisée pour la vérification, les règles et les rapports.","parent":"Parent","topLevel":"Niveau supérieur","add":"Ajouter la catégorie","delete":"Supprimer","deleteConfirm":"Supprimer la catégorie « {name} » ?","seededNote":"Les noms prédéfinis sont traduits automatiquement et ne peuvent pas être renommés ici.","errors":{"load":"Impossible de charger les catégories","create":"Impossible de créer la catégorie","update":"Impossible de modifier la catégorie","delete":"Impossible de supprimer la catégorie"}},
-    "reports": { "eyebrow":"Comprendre les tendances","title":"Rapports","subtitle":"Les dépenses nettes excluent les revenus et virements. Les remboursements réduisent les dépenses et les devises restent séparées.","from":"Du","to":"Au","all":"Toutes","refresh":"Actualiser le rapport","loading":"Calcul des totaux…","categoryDistribution":"Répartition par catégorie","interactive":"Interactif","noCategoryPlot":"Aucune donnée de catégorie à afficher.","monthlyTrend":"Évolution mensuelle","noMonthlyPlot":"Aucune donnée mensuelle à afficher.","byCategory":"Par catégorie","totals":"{count} totaux","noCategories":"Aucune transaction catégorisée.","transactions":"Transactions","total":"Total","byMonth":"Par mois","periods":"{count} périodes","noMonths":"Aucun total mensuel.","month":"Mois","paymentSpending":"Dépenses par période de versement","cycles":"{count} périodes d’allocation","createCycles":"Créez des périodes budgétaires pour comparer les versements.","paymentPeriod":"Période de versement","income":"Revenus","spending":"Dépenses","optional":"Facultatives","net":"Net","opportunities":"Possibilités sur les frais récurrents","opportunitiesNote":"Les alternatives sont saisies par vous et non estimées par l’application.","candidates":"{count} possibilités","noOpportunities":"Aucun coût récurrent stable détecté.","alternativeCost":"Coût mensuel alternatif","notResearched":"Non recherché","switchingCost":"Coût ponctuel du changement","difficulty":"Difficulté","decision":"Décision","potentialSaving":"Économie potentielle","notAssessed":"Non évaluée","perMonth":"{amount}/mois","saveAssessment":"Enregistrer l’évaluation","reset":"Réinitialiser","recurring":"Dépenses récurrentes","patterns":"{count} tendances","noPatterns":"Aucune récurrence détectée.","description":"Description","cadence":"Fréquence","occurrences":"Occurrences","lastSeen":"Dernière occurrence","average":"Moyenne","exportTitle":"Emportez vos données","exportNote":"Les exports utilisent les filtres de date et de devise actifs.","exportCsv":"Exporter en CSV","exportExcel":"Exporter vers Excel","difficulties":{"easy":"Facile","moderate":"Modérée","hard":"Difficile"},"decisions":{"review":"À examiner","planned":"Planifiée","accepted":"Acceptée","rejected":"Rejetée"},"errors":{"load":"Impossible de charger les rapports","save":"Impossible d’enregistrer la possibilité","reset":"Impossible de la réinitialiser"}}
+    "import": {
+      "eyebrow": "Commencez ici",
+      "title": "Importer des transactions",
+      "subtitle": "Importez un fichier CSV, Excel ou un PDF texte. Chaque ligne source est conservée avant nettoyage.",
+      "choose": "Choisir un relevé bancaire",
+      "types": "CSV, XLSX ou PDF texte · 10 Mio maximum",
+      "fallbackCurrency": "Devise par défaut",
+      "queueing": "Mise en file…",
+      "running": "Traitement en cours…",
+      "submit": "Importer et catégoriser",
+      "imported": "Importées",
+      "normalised": "Normalisées",
+      "categorised": "Catégorisées",
+      "review": "À vérifier",
+      "history": "Historique des imports",
+      "batches": "{count} lots",
+      "empty": "Aucun relevé importé.",
+      "file": "Fichier",
+      "rows": "Lignes",
+      "outcome": "Résultat",
+      "retrying": "Nouvelle tentative…",
+      "retry": "Réessayer les lignes échouées",
+      "deleting": "Suppression…",
+      "delete": "Supprimer l’import",
+      "errors": {
+        "history": "Impossible de charger l’historique des imports",
+        "refresh": "Impossible d’actualiser le statut de l’import",
+        "upload": "Échec de l’import",
+        "retry": "Impossible de relancer l’import",
+        "delete": "Impossible de supprimer l’import"
+      }
+    },
+    "review": {
+      "eyebrow": "Validation humaine",
+      "title": "File de vérification",
+      "subtitle": "Choisissez une catégorie et enregistrez une règle réutilisable en une seule étape.",
+      "waiting": "en attente",
+      "loading": "Chargement de la file…",
+      "caughtUp": "Tout est à jour",
+      "empty": "Aucune transaction ne nécessite de vérification.",
+      "merchantUnknown": "Commerçant non identifié",
+      "selectCategory": "Choisir une catégorie",
+      "saveRule": "Enregistrer la règle de correspondance",
+      "saving": "Enregistrement…",
+      "assign": "Attribuer et enregistrer la règle",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "page": "Page {page} sur {pages} · {count} en attente",
+      "pages": "Pages de la file de vérification",
+      "other": "Autres",
+      "errors": {
+        "load": "Impossible de charger la file de vérification",
+        "save": "Impossible d’enregistrer la correction"
+      }
+    },
+    "transactions": {
+      "eyebrow": "Registre",
+      "title": "Transactions",
+      "subtitle": "Recherchez, filtrez et attribuez une catégorie à plusieurs transactions.",
+      "search": "Rechercher",
+      "searchPlaceholder": "Commerçant ou description",
+      "all": "Toutes",
+      "merchant": "Commerçant",
+      "from": "Du",
+      "to": "Au",
+      "batch": "Lot d’import",
+      "applyFilters": "Appliquer les filtres",
+      "selected": "{selected} sélectionnées · {total} au total",
+      "chooseCategory": "Choisir une catégorie",
+      "applyCategory": "Appliquer la catégorie",
+      "date": "Date",
+      "description": "Description",
+      "total": "Total",
+      "loading": "Chargement des transactions…",
+      "empty": "Aucune transaction ne correspond à ces filtres.",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "page": "Page {page} sur {pages} · {count} transactions",
+      "pages": "Pages des transactions",
+      "statuses": {
+        "categorised": "Catégorisée",
+        "needs_review": "À vérifier",
+        "normalised": "Normalisée"
+      },
+      "errors": {
+        "load": "Impossible de charger les transactions",
+        "update": "Impossible de modifier les transactions",
+        "filters": "Impossible de charger les filtres"
+      }
+    },
+    "rules": {
+      "eyebrow": "Automatisation",
+      "title": "Règles",
+      "subtitle": "Les motifs de priorité supérieure sont évalués en premier.",
+      "pattern": "Motif",
+      "matches": "Correspondances",
+      "enabled": "Active",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer la règle « {pattern} » ?",
+      "errors": {
+        "load": "Impossible de charger les règles",
+        "save": "Impossible d’enregistrer la règle",
+        "delete": "Impossible de supprimer la règle"
+      }
+    },
+    "merchants": {
+      "eyebrow": "Améliorer la reconnaissance",
+      "title": "Commerçants",
+      "subtitle": "Les alias relient les descriptions bancaires à un commerçant unique.",
+      "name": "Nom du commerçant",
+      "aliases": "Alias initiaux",
+      "adding": "Ajout…",
+      "addMerchant": "Ajouter le commerçant",
+      "loading": "Chargement des commerçants…",
+      "empty": "Aucun commerçant configuré.",
+      "removeAlias": "Supprimer l’alias",
+      "noAliases": "Aucun alias",
+      "aliasPlaceholder": "Ajouter un alias de description bancaire",
+      "add": "Ajouter",
+      "mergeInto": "Fusionner une variante dans {name}",
+      "merge": "Fusionner",
+      "mergeConfirm": "Fusionner le commerçant sélectionné et toutes ses transactions ?",
+      "errors": {
+        "load": "Impossible de charger les commerçants",
+        "create": "Impossible de créer le commerçant",
+        "addAlias": "Impossible d’ajouter l’alias",
+        "removeAlias": "Impossible de supprimer l’alias",
+        "merge": "Impossible de fusionner les commerçants"
+      }
+    },
+    "categoryManager": {
+      "eyebrow": "Taxonomie",
+      "title": "Catégories",
+      "subtitle": "Gérez la hiérarchie utilisée pour la vérification, les règles et les rapports.",
+      "parent": "Parent",
+      "topLevel": "Niveau supérieur",
+      "add": "Ajouter la catégorie",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer la catégorie « {name} » ?",
+      "seededNote": "Les noms prédéfinis sont traduits automatiquement et ne peuvent pas être renommés ici.",
+      "errors": {
+        "load": "Impossible de charger les catégories",
+        "create": "Impossible de créer la catégorie",
+        "update": "Impossible de modifier la catégorie",
+        "delete": "Impossible de supprimer la catégorie"
+      }
+    },
+    "reports": {
+      "eyebrow": "Comprendre les tendances",
+      "title": "Rapports",
+      "subtitle": "Les dépenses nettes excluent les revenus et virements. Les remboursements réduisent les dépenses et les devises restent séparées.",
+      "from": "Du",
+      "to": "Au",
+      "all": "Toutes",
+      "refresh": "Actualiser le rapport",
+      "loading": "Calcul des totaux…",
+      "categoryDistribution": "Répartition par catégorie",
+      "interactive": "Interactif",
+      "noCategoryPlot": "Aucune donnée de catégorie à afficher.",
+      "priorityDistribution": "Dépenses par priorité",
+      "noPriorityPlot": "Aucune donnée de priorité à afficher.",
+      "byCategory": "Par catégorie",
+      "totals": "{count} totaux",
+      "noCategories": "Aucune transaction catégorisée.",
+      "transactions": "Transactions",
+      "total": "Total",
+      "byPriority": "Par priorité",
+      "noPriorities": "Aucun total par priorité.",
+      "paymentSpending": "Dépenses par période de versement",
+      "cycles": "{count} périodes d’allocation",
+      "createCycles": "Créez des périodes budgétaires pour comparer les versements.",
+      "paymentPeriod": "Période de versement",
+      "income": "Revenus",
+      "spending": "Dépenses",
+      "optional": "Facultatives",
+      "net": "Net",
+      "opportunities": "Possibilités sur les frais récurrents",
+      "opportunitiesNote": "Les alternatives sont saisies par vous et non estimées par l’application.",
+      "candidates": "{count} possibilités",
+      "noOpportunities": "Aucun coût récurrent stable détecté.",
+      "alternativeCost": "Coût mensuel alternatif",
+      "notResearched": "Non recherché",
+      "switchingCost": "Coût ponctuel du changement",
+      "difficulty": "Difficulté",
+      "decision": "Décision",
+      "potentialSaving": "Économie potentielle",
+      "notAssessed": "Non évaluée",
+      "perMonth": "{amount}/mois",
+      "opportunitySummary": "{cadence} · {count} paiements · coût mensuel actuel {amount}",
+      "firstYearSaving": "{amount} la première année",
+      "saveAssessment": "Enregistrer l’évaluation",
+      "reset": "Réinitialiser",
+      "recurring": "Dépenses récurrentes",
+      "patterns": "{count} tendances",
+      "noPatterns": "Aucune récurrence détectée.",
+      "description": "Description",
+      "cadence": "Fréquence",
+      "occurrences": "Occurrences",
+      "lastSeen": "Dernière occurrence",
+      "average": "Moyenne",
+      "difficulties": {
+        "easy": "Facile",
+        "moderate": "Modérée",
+        "hard": "Difficile"
+      },
+      "decisions": {
+        "review": "À examiner",
+        "planned": "Planifiée",
+        "accepted": "Acceptée",
+        "rejected": "Rejetée"
+      },
+      "errors": {
+        "load": "Impossible de charger les rapports",
+        "save": "Impossible d’enregistrer la possibilité",
+        "reset": "Impossible de la réinitialiser"
+      }
+    }
   },
-  "importDetail": { "deleteConfirm":"Supprimer le lot {id} ({file}) et toutes les transactions importées ? Les catégories, règles, commerçants et votre budget seront conservés.","running":"Le lot {id} est {status}. Cette page s’actualisera automatiquement.","failed":"Échec du traitement : {error}","normalisationFailed":"{count} ligne(s) n’ont pas pu être normalisées.","duplicates":"{count} ligne(s) correspondaient à des transactions déjà importées et ont été ignorées.","batch":"Lot {id}","rowSummary":"{normalised}/{total} normalisées","duplicatesShort":"{count} doublons ignorés","failedShort":"{count} échouées","outcome":"{categorised} catégorisées, {review} à vérifier","resetConfirm":"Réinitialiser l’évaluation enregistrée pour {description} ?" },
-  "dynamic": { "importStatuses":{"queued":"En attente","processing":"En cours","completed":"Terminé","completed_with_errors":"Terminé avec des erreurs","failed":"Échec"},"cadences":{"weekly":"Hebdomadaire","fortnightly":"Toutes les deux semaines","monthly":"Mensuelle","quarterly":"Trimestrielle","annual":"Annuelle","irregular":"Irrégulière"},"approxDays":"environ {count} jours" },
+  "importDetail": {
+    "deleteConfirm": "Supprimer le lot {id} ({file}) et toutes les transactions importées ? Les catégories, règles, commerçants et votre budget seront conservés.",
+    "running": "Le lot {id} est {status}. Cette page s’actualisera automatiquement.",
+    "failed": "Échec du traitement : {error}",
+    "normalisationFailed": "{count} ligne(s) n’ont pas pu être normalisées.",
+    "duplicates": "{count} ligne(s) correspondaient à des transactions déjà importées et ont été ignorées.",
+    "batch": "Lot {id}",
+    "rowSummary": "{normalised}/{total} normalisées",
+    "duplicatesShort": "{count} doublons ignorés",
+    "failedShort": "{count} échouées",
+    "outcome": "{categorised} catégorisées, {review} à vérifier",
+    "resetConfirm": "Réinitialiser l’évaluation enregistrée pour {description} ?"
+  },
+  "dynamic": {
+    "importStatuses": {
+      "queued": "En attente",
+      "processing": "En cours",
+      "completed": "Terminé",
+      "completed_with_errors": "Terminé avec des erreurs",
+      "failed": "Échec"
+    },
+    "cadences": {
+      "weekly": "Hebdomadaire",
+      "fortnightly": "Toutes les deux semaines",
+      "monthly": "Mensuelle",
+      "quarterly": "Trimestrielle",
+      "annual": "Annuelle",
+      "irregular": "Irrégulière"
+    },
+    "approxDays": "environ {count} jours"
+  },
   "categories": {
-    "housing": { "_name": "Logement", "rent": "Loyer", "council_tax": "Taxe d’habitation", "repairs": "Réparations" },
-    "utilities": { "_name": "Services publics", "electricity": "Électricité", "water": "Eau", "internet": "Internet", "mobile": "Téléphone mobile" },
-    "groceries": { "_name": "Courses alimentaires", "supermarkets": "Supermarchés", "food_shops": "Commerces alimentaires" },
-    "transport": { "_name": "Transport", "public_transport": "Transports en commun", "fuel": "Carburant", "taxi": "Taxi", "maintenance": "Entretien" },
-    "eating_out": { "_name": "Repas à l’extérieur", "restaurants": "Restaurants", "takeaway": "Plats à emporter", "cafés": "Cafés" },
-    "shopping": { "_name": "Achats", "clothing": "Vêtements", "electronics": "Électronique", "household_items": "Articles ménagers" },
-    "health": { "_name": "Santé", "pharmacy": "Pharmacie", "dentist": "Dentiste", "healthcare": "Soins de santé" },
-    "personal_care": { "_name": "Soins personnels", "toiletries": "Produits de toilette", "haircare": "Soins capillaires", "beauty": "Beauté" },
-    "entertainment": { "_name": "Loisirs", "streaming": "Streaming", "games": "Jeux", "events": "Événements" },
-    "financial": { "_name": "Finances", "bank_fees": "Frais bancaires", "loan_interest": "Intérêts d’emprunt", "insurance": "Assurance" },
-    "subscriptions": { "_name": "Abonnements", "software": "Logiciels", "memberships": "Adhésions" },
-    "savings_and_investments": { "_name": "Épargne et placements", "isa": "ISA", "sipp": "SIPP", "savings": "Épargne" },
-    "income": { "_name": "Revenus", "salary": "Salaire", "refunds": "Remboursements", "benefits": "Allocations" },
-    "transfers": { "_name": "Virements", "own_account_transfers": "Virements entre comptes personnels", "credit_card_payments": "Paiements de carte de crédit" },
-    "other": { "_name": "Autres", "uncategorized": "Non catégorisé", "exceptional_expenses": "Dépenses exceptionnelles" }
+    "housing": {
+      "_name": "Logement",
+      "rent": "Loyer",
+      "council_tax": "Taxe d’habitation",
+      "repairs": "Réparations"
+    },
+    "utilities": {
+      "_name": "Services publics",
+      "electricity": "Électricité",
+      "water": "Eau",
+      "internet": "Internet",
+      "mobile": "Téléphone mobile"
+    },
+    "groceries": {
+      "_name": "Courses alimentaires",
+      "supermarkets": "Supermarchés",
+      "food_shops": "Commerces alimentaires"
+    },
+    "transport": {
+      "_name": "Transport",
+      "public_transport": "Transports en commun",
+      "fuel": "Carburant",
+      "taxi": "Taxi",
+      "maintenance": "Entretien"
+    },
+    "eating_out": {
+      "_name": "Repas à l’extérieur",
+      "restaurants": "Restaurants",
+      "takeaway": "Plats à emporter",
+      "cafés": "Cafés"
+    },
+    "shopping": {
+      "_name": "Achats",
+      "clothing": "Vêtements",
+      "electronics": "Électronique",
+      "household_items": "Articles ménagers"
+    },
+    "health": {
+      "_name": "Santé",
+      "pharmacy": "Pharmacie",
+      "dentist": "Dentiste",
+      "healthcare": "Soins de santé"
+    },
+    "personal_care": {
+      "_name": "Soins personnels",
+      "toiletries": "Produits de toilette",
+      "haircare": "Soins capillaires",
+      "beauty": "Beauté"
+    },
+    "entertainment": {
+      "_name": "Loisirs",
+      "streaming": "Streaming",
+      "games": "Jeux",
+      "events": "Événements"
+    },
+    "financial": {
+      "_name": "Finances",
+      "bank_fees": "Frais bancaires",
+      "loan_interest": "Intérêts d’emprunt",
+      "insurance": "Assurance"
+    },
+    "subscriptions": {
+      "_name": "Abonnements",
+      "software": "Logiciels",
+      "memberships": "Adhésions"
+    },
+    "savings_and_investments": {
+      "_name": "Épargne et placements",
+      "isa": "ISA",
+      "sipp": "SIPP",
+      "savings": "Épargne"
+    },
+    "income": {
+      "_name": "Revenus",
+      "salary": "Salaire",
+      "refunds": "Remboursements",
+      "benefits": "Allocations"
+    },
+    "transfers": {
+      "_name": "Virements",
+      "own_account_transfers": "Virements entre comptes personnels",
+      "credit_card_payments": "Paiements de carte de crédit"
+    },
+    "other": {
+      "_name": "Autres",
+      "uncategorized": "Non catégorisé",
+      "exceptional_expenses": "Dépenses exceptionnelles"
+    }
   },
   "plan": {
     "eyebrow": "Jusqu’à votre prochain versement",
@@ -223,6 +570,17 @@
     "preview": "Prévisualiser le budget proposé",
     "expectedIncome": "Revenu attendu",
     "confidence": "Confiance : {value} %",
+    "bankingDayAdjusted": "avancé depuis le {date}, jour non ouvré",
+    "proposalStates": {
+      "new": "Nouvelle proposition",
+      "unchanged": "Déjà confirmée",
+      "changed": "Modifiée — sélectionner pour actualiser"
+    },
+    "impactIncome": "Revenus sélectionnés",
+    "impactBills": "Factures sélectionnées",
+    "impactEssentials": "Enveloppes essentielles",
+    "predictedEnd": "Solde prévu en fin de période",
+    "safeWeekly": "Dépenses hebdomadaires sûres",
     "allowanceSuffix": "Enveloppe {name}",
     "evidenceMonths": "{count} mois de données | {count} mois de données",
     "confirmPlan": "Confirmer le budget sélectionné",

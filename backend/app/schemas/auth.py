@@ -43,6 +43,9 @@ class AuthenticatedUser(BaseModel):
     is_admin: bool
     workspace_id: int
     email_verified: bool
+    trial_ends_at: datetime
+    access_expires_at: datetime | None
+    access_active: bool
 
 
 class AuthSessionResponse(BaseModel):
