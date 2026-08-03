@@ -84,7 +84,7 @@ backend-test: ## Run backend tests
 	@cd backend && $(PYTHON) -m pytest
 
 backend-audit: ## Audit installed Python dependencies in the local virtual environment
-	@$(PYTHON) -m pip_audit --progress-spinner=off
+	@$(PYTHON) -m pip_audit --progress-spinner=off --skip-editable
 
 frontend-typecheck: ## Run frontend TypeScript checks
 	@cd frontend && npm run typecheck
