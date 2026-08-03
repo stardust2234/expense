@@ -188,9 +188,11 @@
     "liquidity": "Liquidités Folio",
     "usableBalance": "Solde actuellement disponible",
     "balanceSnapshot": "Solde {source}",
+    "fundingSnapshot": "Financé par {amount} reçu le {date}",
     "balanceSources": {
       "current": "actuel",
-      "opening": "initial"
+      "opening": "initial",
+      "funding_income": "revenu reçu"
     },
     "cycleEnded": "Période terminée",
     "incomeToday": "Revenu attendu aujourd’hui",
@@ -206,7 +208,7 @@
     "essentialRemaining": "Dépenses essentielles restantes",
     "essentialNote": "Enveloppes et réserves protégées",
     "predictedBalance": "Solde prévu en fin de période",
-    "predictedNote": "Après les factures et les enveloppes restantes",
+    "predictedNote": "Prévu juste avant le prochain revenu",
     "opportunities": "Trois meilleures économies réalistes",
     "opportunitiesNote": "Seules les solutions que vous avez évaluées sont affichées.",
     "reviewAll": "Tout examiner",

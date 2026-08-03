@@ -1,9 +1,9 @@
-import calendar
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     AllowanceType,
@@ -14,6 +14,13 @@ from app.models import (
     Expense,
     PaymentCycle,
     SpendingPriority,
+    TransactionStatus,
+)
+from app.services.cash_flow import CashFlowKind, cash_flow_kind
+from app.services.funding_window import (
+    FundingWindow,
+    IncomeScheduleItem,
+    resolve_funding_window,
 )
 from app.services.payment_cycle_service import (
     FinancialPlanConflictError,
@@ -29,6 +36,14 @@ from app.services.safe_spending_forecast import (
 
 class AllowanceNotFoundError(LookupError):
     pass
+
+
+@dataclass(frozen=True)
+class BuiltCycleForecast:
+    forecast: SafeSpendingForecast
+    balance_source: str
+    currency: str
+    funding_window: FundingWindow
 
 
 def get_allowance(session: Session, allowance_id: int) -> CycleAllowance:
@@ -116,45 +131,63 @@ def build_cycle_forecast(
     *,
     payment_cycle_id: int,
     as_of_date: date | None = None,
-) -> tuple[SafeSpendingForecast, str, str]:
+) -> BuiltCycleForecast:
     cycle = get_payment_cycle(session, payment_cycle_id)
-    effective_date = as_of_date or datetime.now(ZoneInfo("Europe/London")).date()
-    next_income_date = _next_income_date(
-        cycle.next_payment_date,
-        effective_date,
-        period_end=cycle.end_date,
+    today = datetime.now(ZoneInfo("Europe/London")).date()
+    window_reference_date, requested_effective_date = _forecast_dates(
+        cycle,
+        requested_date=as_of_date,
+        today=today,
     )
-    income_cycle = session.scalar(
-        select(PaymentCycle).where(
-            PaymentCycle.currency == cycle.currency,
-            PaymentCycle.next_payment_date == next_income_date,
-        )
-    )
-    expected_income_amount = (
-        income_cycle.expected_income_amount
-        if income_cycle is not None
-        else cycle.expected_income_amount
-    )
-    balance_source = "current" if cycle.current_balance is not None else "opening"
-    expenses = list(
+    income_cycles = tuple(
         session.scalars(
-            select(Expense).where(
-                Expense.payment_cycle_id == cycle.id,
-                Expense.transaction_date <= effective_date,
-            )
+            select(PaymentCycle)
+            .where(PaymentCycle.currency == cycle.currency)
+            .order_by(PaymentCycle.next_payment_date, PaymentCycle.id)
         ).all()
     )
-    usable_balance = (
-        cycle.current_balance
-        if cycle.current_balance is not None
-        else cycle.opening_balance + sum(expense.amount for expense in expenses)
+    funding_window = resolve_funding_window(
+        _income_schedule(session, cycles=income_cycles, currency=cycle.currency),
+        as_of_date=window_reference_date,
     )
+    effective_date = min(
+        max(requested_effective_date, funding_window.start_date),
+        funding_window.end_date - timedelta(days=1),
+    )
+    expenses = list(
+        session.scalars(
+            select(Expense)
+            .where(
+                Expense.currency == cycle.currency,
+                Expense.transaction_date >= funding_window.start_date,
+                Expense.transaction_date <= effective_date,
+            )
+            .options(selectinload(Expense.category).selectinload(Category.parent))
+        ).all()
+    )
+    if cycle.current_balance is not None:
+        usable_balance = cycle.current_balance
+        balance_source = "current"
+    else:
+        imported_funding_income = any(
+            expense.amount > 0
+            and expense.category is not None
+            and cash_flow_kind(expense.category) is CashFlowKind.INCOME
+            and expense.transaction_date <= funding_window.start_date + timedelta(days=3)
+            and abs(expense.amount - funding_window.funding_amount)
+            <= max(100, funding_window.funding_amount // 20)
+            for expense in expenses
+        )
+        usable_balance = sum(expense.amount for expense in expenses)
+        if not imported_funding_income:
+            usable_balance += funding_window.funding_amount
+        balance_source = "funding_income"
     commitment_rows = session.scalars(
         select(Commitment).where(
             Commitment.currency == cycle.currency,
             Commitment.status == CommitmentStatus.PENDING,
-            Commitment.due_date >= cycle.start_date,
-            Commitment.due_date < next_income_date,
+            Commitment.due_date >= funding_window.start_date,
+            Commitment.due_date < funding_window.end_date,
         )
     ).all()
     pending_commitments = tuple(
@@ -164,13 +197,16 @@ def build_cycle_forecast(
         )
         for commitment in commitment_rows
     )
+    allowance_plan_date = (
+        funding_window.start_date + (funding_window.end_date - funding_window.start_date) // 2
+    )
     allowance_rows = session.scalars(
         select(CycleAllowance)
         .join(PaymentCycle)
         .where(
             PaymentCycle.currency == cycle.currency,
-            PaymentCycle.start_date < next_income_date,
-            PaymentCycle.end_date > effective_date,
+            PaymentCycle.start_date <= allowance_plan_date,
+            PaymentCycle.end_date > allowance_plan_date,
         )
     ).all()
     forecast_allowances = tuple(
@@ -186,28 +222,71 @@ def build_cycle_forecast(
     )
     forecast = calculate_safe_spending(
         as_of_date=effective_date,
-        next_payment_date=next_income_date,
+        next_payment_date=funding_window.end_date,
         usable_balance=usable_balance,
-        expected_income_amount=expected_income_amount,
+        expected_income_amount=funding_window.funding_amount,
         pending_commitments=pending_commitments,
         allowances=forecast_allowances,
     )
-    return forecast, balance_source, cycle.currency
+    return BuiltCycleForecast(forecast, balance_source, cycle.currency, funding_window)
 
 
-def _next_income_date(scheduled_date: date, as_of_date: date, *, period_end: date) -> date:
-    if as_of_date >= period_end:
-        return scheduled_date
-    candidate = scheduled_date
-    while candidate < as_of_date:
-        next_month = candidate.month % 12 + 1
-        next_year = candidate.year + (1 if candidate.month == 12 else 0)
-        candidate = date(
-            next_year,
-            next_month,
-            min(candidate.day, calendar.monthrange(next_year, next_month)[1]),
+def _income_schedule(
+    session: Session,
+    *,
+    cycles: tuple[PaymentCycle, ...],
+    currency: str,
+) -> tuple[IncomeScheduleItem, ...]:
+    planned = {
+        cycle.next_payment_date: IncomeScheduleItem(
+            cycle.id,
+            cycle.next_payment_date,
+            cycle.expected_income_amount,
         )
-    return candidate
+        for cycle in cycles
+    }
+    income_rows = session.scalars(
+        select(Expense)
+        .where(
+            Expense.currency == currency,
+            Expense.amount > 0,
+            Expense.status == TransactionStatus.CATEGORISED,
+            Expense.category_id.is_not(None),
+        )
+        .options(selectinload(Expense.category).selectinload(Category.parent))
+        .order_by(Expense.transaction_date, Expense.id)
+        .limit(1000)
+    ).all()
+    for expense in income_rows:
+        if expense.category is None or cash_flow_kind(expense.category) is not CashFlowKind.INCOME:
+            continue
+        closest_cycle = min(
+            cycles, key=lambda item: abs(item.expected_income_amount - expense.amount)
+        )
+        tolerance = max(100, closest_cycle.expected_income_amount // 20)
+        if abs(closest_cycle.expected_income_amount - expense.amount) > tolerance:
+            continue
+        planned[expense.transaction_date] = IncomeScheduleItem(
+            expense.payment_cycle_id or closest_cycle.id,
+            expense.transaction_date,
+            expense.amount,
+        )
+    return tuple(planned.values())
+
+
+def _forecast_dates(
+    cycle: PaymentCycle,
+    *,
+    requested_date: date | None,
+    today: date,
+) -> tuple[date, date]:
+    if requested_date is not None:
+        return requested_date, requested_date
+    if today < cycle.start_date:
+        return cycle.start_date, cycle.start_date
+    if today >= cycle.end_date:
+        return cycle.start_date, cycle.end_date - timedelta(days=1)
+    return today, today
 
 
 def _allowance_spending(

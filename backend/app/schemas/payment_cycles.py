@@ -258,7 +258,11 @@ class AllowanceForecastItem(BaseModel):
 class SafeSpendingForecastResponse(BaseModel):
     payment_cycle_id: int
     as_of_date: date
+    funding_start_date: date
+    funding_end_date: date
+    funding_income_amount: int
     next_payment_date: date
+    next_income_amount: int
     currency: str
     balance_source: str
     usable_balance: int

@@ -398,19 +398,24 @@ async def get_safe_spending_forecast(
     as_of: date | None = None,
 ) -> SafeSpendingForecastResponse:
     try:
-        forecast, balance_source, currency = build_cycle_forecast(
+        built = build_cycle_forecast(
             session,
             payment_cycle_id=payment_cycle_id,
             as_of_date=as_of,
         )
     except PaymentCycleNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    forecast = built.forecast
     return SafeSpendingForecastResponse(
         payment_cycle_id=payment_cycle_id,
         as_of_date=forecast.as_of_date,
+        funding_start_date=built.funding_window.start_date,
+        funding_end_date=built.funding_window.end_date,
+        funding_income_amount=built.funding_window.funding_amount,
         next_payment_date=forecast.next_payment_date,
-        currency=currency,
-        balance_source=balance_source,
+        next_income_amount=built.funding_window.next_income_amount,
+        currency=built.currency,
+        balance_source=built.balance_source,
         usable_balance=forecast.usable_balance,
         pending_commitments=forecast.pending_commitments,
         allowance_reserves=forecast.allowance_reserves,

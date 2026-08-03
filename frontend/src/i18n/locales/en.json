@@ -188,9 +188,11 @@
     "liquidity": "Folio liquidity",
     "usableBalance": "Current usable balance",
     "balanceSnapshot": "{source} balance snapshot",
+    "fundingSnapshot": "Funded by {amount} received on {date}",
     "balanceSources": {
       "current": "Current",
-      "opening": "Opening"
+      "opening": "Opening",
+      "funding_income": "received income"
     },
     "cycleEnded": "Cycle ended",
     "incomeToday": "Income due today",
@@ -206,7 +208,7 @@
     "essentialRemaining": "Essential spending remaining",
     "essentialNote": "Protected allowances and reserves",
     "predictedBalance": "Predicted period-end balance",
-    "predictedNote": "After bills and remaining allowances",
+    "predictedNote": "Expected immediately before the next income",
     "opportunities": "Top realistic opportunities",
     "opportunitiesNote": "Only alternatives you have assessed are shown.",
     "reviewAll": "Review all",

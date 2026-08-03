@@ -75,7 +75,11 @@ const futureCycle = {
 const forecast = {
   payment_cycle_id: 7,
   as_of_date: "2026-07-25",
+  funding_start_date: "2026-07-21",
+  funding_end_date: "2026-08-21",
+  funding_income_amount: 80000,
   next_payment_date: "2026-08-21",
+  next_income_amount: 80000,
   currency: "GBP",
   balance_source: "current" as const,
   usable_balance: 42000,

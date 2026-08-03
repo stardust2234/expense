@@ -11,6 +11,8 @@ SHELL := /usr/bin/env bash
 SETUP_SCRIPT ?= scripts/setup.sh
 DOCKER_COMPOSE ?= docker compose
 COMPOSE_FILE ?= infra/compose/docker-compose.yml
+COMPOSE_ENV_FILE ?= $(CURDIR)/.env
+COMPOSE_ENV_ARGS = $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),)
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -31,22 +33,22 @@ check: ## Run the standard local validation suite
 	@$(MAKE) frontend-build
 
 up: ## Start the full stack in Docker Compose
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up --build
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) up --build
 
 down: ## Stop the Docker Compose stack
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) down
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) down
 
 logs: ## Tail Docker Compose logs
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) logs -f
 
 ps: ## Show Docker Compose services
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) ps
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) ps
 
 compose-build: ## Build all Docker Compose services
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) build
 
 smoke-test: ## Verify the full stack through Caddy and the API health endpoint
-	@DOCKER_COMPOSE='$(DOCKER_COMPOSE)' COMPOSE_FILE='$(COMPOSE_FILE)' bash scripts/smoke-test.sh
+	@DOCKER_COMPOSE='$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS)' COMPOSE_FILE='$(COMPOSE_FILE)' bash scripts/smoke-test.sh
 
 backend-run: ## Start the FastAPI app locally
 	@cd backend && AUTH_COOKIE_SECURE=true $(PYTHON) -m uvicorn app.main:app --reload
@@ -82,7 +84,7 @@ backend-test: ## Run backend tests
 	@cd backend && $(PYTHON) -m pytest
 
 backend-audit: ## Audit installed Python dependencies in the local virtual environment
-	@$(PYTHON) -m pip_audit --progress-spinner=off
+	@$(PYTHON) -m pip_audit --progress-spinner=off --skip-editable
 
 frontend-typecheck: ## Run frontend TypeScript checks
 	@cd frontend && npm run typecheck

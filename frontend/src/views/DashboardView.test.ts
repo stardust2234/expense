@@ -42,7 +42,11 @@ function forecast(cycleId: number) {
   return {
     payment_cycle_id: cycleId,
     as_of_date: "2026-07-25",
+    funding_start_date: "2026-07-25",
+    funding_end_date: past ? pastCycle.next_payment_date : currentCycle.next_payment_date,
+    funding_income_amount: past ? pastCycle.expected_income_amount : currentCycle.expected_income_amount,
     next_payment_date: past ? pastCycle.next_payment_date : currentCycle.next_payment_date,
+    next_income_amount: past ? pastCycle.expected_income_amount : currentCycle.expected_income_amount,
     currency: "GBP",
     balance_source: "current",
     usable_balance: 42000,
