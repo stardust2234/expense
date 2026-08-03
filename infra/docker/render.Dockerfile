@@ -10,6 +10,11 @@ RUN npm run build
 
 FROM caddy:2-alpine AS caddy-binary
 
+# Render starts containers with no-new-privileges. The upstream image gives
+# Caddy cap_net_bind_service, which makes execve fail with EPERM in that
+# environment. Render exposes an unprivileged high port, so remove it.
+RUN setcap -r /usr/bin/caddy
+
 FROM python:3.12-slim
 
 WORKDIR /srv/backend
