@@ -566,6 +566,131 @@ async def test_forecast_rolls_to_next_income_and_derives_opening_balance(
     assert forecast["next_payment_date"] == "2026-08-29"
     assert forecast["usable_balance"] == 90000
     assert forecast["pending_commitments"] == 20000
+    assert forecast["balance_source"] == "funding_income"
+
+
+@pytest.mark.anyio
+async def test_forecast_uses_received_income_to_fund_until_the_next_income(
+    client: AsyncClient,
+    session: Session,
+) -> None:
+    income = Category(code="income", name="Income")
+    essentials = Category(
+        name="Essentials",
+        default_priority=SpendingPriority.ESSENTIAL,
+    )
+    session.add_all([income, essentials])
+    session.commit()
+    july = await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-07-30",
+            "expected_income_amount": 92490,
+            "currency": "GBP",
+            "opening_balance": 0,
+            "status": "active",
+        },
+    )
+    august = await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-08-29",
+            "expected_income_amount": 292490,
+            "currency": "GBP",
+            "opening_balance": 0,
+            "status": "planned",
+        },
+    )
+    session.add(
+        Expense(
+            transaction_date=date(2026, 7, 30),
+            description="DWP UC",
+            normalised_description="DWP UC",
+            amount=92490,
+            currency="GBP",
+            category_id=income.id,
+            payment_cycle_id=july.json()["id"],
+            status=TransactionStatus.CATEGORISED,
+        )
+    )
+    session.commit()
+    allowance = await client.post(
+        f"/api/payment-cycles/{august.json()['id']}/allowances",
+        json={
+            "name": "August essentials",
+            "allowance_type": "custom",
+            "amount": 117305,
+            "priority": "essential",
+            "category_id": essentials.id,
+        },
+    )
+    assert allowance.status_code == 201
+
+    response = await client.get(
+        f"/api/payment-cycles/{august.json()['id']}/forecast?as_of=2026-08-03"
+    )
+
+    assert response.status_code == 200
+    forecast = response.json()
+    assert forecast["funding_start_date"] == "2026-07-30"
+    assert forecast["funding_end_date"] == "2026-08-29"
+    assert forecast["funding_income_amount"] == 92490
+    assert forecast["next_income_amount"] == 292490
+    assert forecast["usable_balance"] == 92490
+    assert forecast["projected_balance"] == -24815
+    assert forecast["shortfall"] == 24815
+
+
+@pytest.mark.anyio
+async def test_previous_calendar_plan_uses_its_historical_funding_window(
+    client: AsyncClient,
+    session: Session,
+) -> None:
+    income = Category(code="income", name="Income")
+    session.add(income)
+    session.commit()
+    june = await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-06-29",
+            "expected_income_amount": 92490,
+            "currency": "GBP",
+            "opening_balance": 0,
+            "status": "closed",
+        },
+    )
+    await client.post(
+        "/api/payment-cycles",
+        json={
+            "next_payment_date": "2026-07-30",
+            "expected_income_amount": 92490,
+            "currency": "GBP",
+            "opening_balance": 0,
+            "status": "active",
+        },
+    )
+    session.add(
+        Expense(
+            transaction_date=date(2026, 5, 29),
+            description="DWP UC",
+            normalised_description="DWP UC",
+            amount=90014,
+            currency="GBP",
+            category_id=income.id,
+            status=TransactionStatus.CATEGORISED,
+        )
+    )
+    session.commit()
+
+    response = await client.get(f"/api/payment-cycles/{june.json()['id']}/forecast")
+
+    assert response.status_code == 200
+    forecast = response.json()
+    assert forecast["funding_start_date"] == "2026-05-29"
+    assert forecast["funding_end_date"] == "2026-06-29"
+    assert forecast["as_of_date"] == "2026-06-28"
+    assert forecast["funding_income_amount"] == 90014
+    assert forecast["next_income_amount"] == 92490
 
 
 @pytest.mark.anyio

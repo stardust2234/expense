@@ -32,6 +32,8 @@ htmlcov/
 .tox/
 .nox/
 .pyright/
+.hypothesis/
+.python-version
 
 # Node and frontend build output
 node_modules/
@@ -46,6 +48,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.npm/
 
 # Runtime data, uploaded statements, and logs
 data/*
@@ -53,4 +56,13 @@ data/*
 uploads/
 tmp/
 *.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local shell and environment tooling
+.direnv/
+.envrc
 

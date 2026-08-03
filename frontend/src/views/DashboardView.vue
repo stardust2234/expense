@@ -158,7 +158,8 @@ onMounted(load);
           <div class="holographic-card-meta"><WalletCards :size="22" :stroke-width="1.5" /><span>{{ t("dashboard.liquidity") }}</span><i></i><i></i></div>
           <span>{{ t("dashboard.usableBalance") }}</span>
           <strong>{{ formatMoney(forecast.usable_balance, forecast.currency) }}</strong>
-          <small>{{ t("dashboard.balanceSnapshot", { source: t(`dashboard.balanceSources.${forecast.balance_source}`) }) }}</small>
+          <small v-if="forecast.balance_source === 'funding_income'">{{ t("dashboard.fundingSnapshot", { amount: formatMoney(forecast.funding_income_amount, forecast.currency), date: formatUkDate(forecast.funding_start_date) }) }}</small>
+          <small v-else>{{ t("dashboard.balanceSnapshot", { source: t(`dashboard.balanceSources.${forecast.balance_source}`) }) }}</small>
         </article>
         <article class="priority-card next-income">
           <span v-if="cycleTiming === 'past'">{{ t("dashboard.cycleEnded") }}</span>
@@ -166,8 +167,8 @@ onMounted(load);
           <span v-else>{{ t("dashboard.nextIncome") }}</span>
           <strong>{{ formatUkDate(forecast.next_payment_date) }}</strong>
           <small v-if="cycleTiming === 'past'">{{ t("dashboard.historicalEnded", { count: daysSinceCycleEnded }) }}</small>
-          <small v-else-if="cycleTiming === 'today'">{{ t("dashboard.expectedToday", { amount: formatMoney(selectedCycle.expected_income_amount, selectedCycle.currency) }) }}</small>
-          <small v-else>{{ t("dashboard.expectedInDays", { count: forecast.days_remaining, amount: formatMoney(selectedCycle.expected_income_amount, selectedCycle.currency) }) }}</small>
+          <small v-else-if="cycleTiming === 'today'">{{ t("dashboard.expectedToday", { amount: formatMoney(forecast.next_income_amount, forecast.currency) }) }}</small>
+          <small v-else>{{ t("dashboard.expectedInDays", { count: forecast.days_remaining, amount: formatMoney(forecast.next_income_amount, forecast.currency) }) }}</small>
         </article>
         <article class="priority-card bills-due">
           <span>{{ t("dashboard.billsDue") }}</span>

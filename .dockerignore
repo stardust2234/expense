@@ -27,6 +27,8 @@ venv
 **/.tox
 **/.nox
 **/.pyright
+**/.hypothesis
+.python-version
 backend/tests
 
 # Node dependencies, caches, tests, and build output
@@ -38,6 +40,7 @@ frontend/src/**/*.test.ts
 **/.vite
 **/*.tsbuildinfo
 **/npm-debug.log*
+**/.npm
 
 # Persistent and temporary runtime data
 data/*
@@ -45,10 +48,17 @@ data/*
 uploads
 tmp
 **/*.log
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
 
 # Local-only metadata
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+.direnv
+.envrc
 

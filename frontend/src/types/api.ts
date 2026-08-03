@@ -154,9 +154,13 @@ export type AllowanceForecast = {
 export type SafeSpendingForecast = {
   payment_cycle_id: number;
   as_of_date: string;
+  funding_start_date: string;
+  funding_end_date: string;
+  funding_income_amount: number;
   next_payment_date: string;
+  next_income_amount: number;
   currency: string;
-  balance_source: "current" | "opening";
+  balance_source: "current" | "funding_income";
   usable_balance: number;
   pending_commitments: number;
   allowance_reserves: number;

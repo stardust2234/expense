@@ -109,13 +109,20 @@ Do not run multiple API containers against this SQLite database. Imports use a t
 single-process background worker, and interrupted queued or processing jobs are resumed when the
 API starts.
 
-### Render Blueprint deployment
+### Render deployment from Git
 
-[`render.yaml`](render.yaml) deploys the frontend and API as one same-origin Docker web service and
-stores SQLite under a 1 GB persistent disk mounted at `/data`. Import the Blueprint in Render and
-provide `MAIL_FROM`, `SMTP_HOST`, `SMTP_USERNAME`, and `SMTP_PASSWORD` when prompted. Render supplies
-the public application URL automatically; set `PUBLIC_APP_URL` manually only when using a custom
-domain.
+Create a Docker web service from the GitHub mirror of this repository. Leave Render's **Root
+Directory** empty, set **Dockerfile Path** to `./infra/docker/render.Dockerfile`, and set **Docker
+Build Context Directory** to `.`. Configure `/api/health` as the health-check path.
+
+Add a Render persistent disk of at least 1 GB mounted at `/data`, then configure
+`DATABASE_URL=sqlite:////data/expense.db`. The disk is Render infrastructure and is not represented
+by an `.env` entry. Set `PUBLIC_APP_URL` to the final HTTPS origin, such as
+`https://folio.libranode.dev`, so verification and password-reset links use the public hostname.
+
+Configure `MAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASSWORD` in Render's
+environment settings. Generate separate random values for `AUTH_THROTTLE_SECRET` and
+`ADMIN_BOOTSTRAP_SECRET`; do not copy development secrets or commit a production `.env` file.
 
 The persistent disk requires a paid instance and restricts the service to one instance, which is
 also the supported topology for this SQLite application. Migrations and idempotent category seeding
@@ -142,7 +149,8 @@ especially encrypted backups and tested restoration.
 - Low-confidence review queue with correction-to-rule workflow
 - Searchable transactions with bulk category editing
 - Rule, merchant alias, merchant merge, and category hierarchy management
-- Payment-period, monthly, category, recurring-expense, and opportunity reports with Plotly charts
+- Payment-period, priority-distribution, category, recurring-expense, and opportunity reports with
+  Plotly charts
   and CSV/XLSX export
 
 ## Structure
