@@ -102,6 +102,9 @@ dependency-audit: ## Audit Python and JavaScript dependencies
 	@$(MAKE) backend-audit
 	@$(MAKE) frontend-audit
 
+email-check: ## Probe SMTP and send a test message (EMAIL_TO is optional)
+	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) exec -T api python -m app.email_check $(if $(EMAIL_TO),--to "$(EMAIL_TO)",)
+
 .PHONY: git-help branch-sync promote-main
 
 git-help: ## Show branch workflow helper targets

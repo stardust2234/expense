@@ -64,7 +64,6 @@ describe("application routes", () => {
       id: 1,
       email: "person@example.com",
       display_name: "Person",
-      is_admin: false,
       workspace_id: 1,
       email_verified: true,
       trial_ends_at: "2026-01-01T00:00:00Z",

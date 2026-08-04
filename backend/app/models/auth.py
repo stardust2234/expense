@@ -5,11 +5,11 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
     String,
-    UniqueConstraint,
     func,
     text,
 )
@@ -26,12 +26,6 @@ class User(Base):
     pending_email: Mapped[str | None] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_admin: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("0")
-    )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default=text("1")
-    )
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
@@ -43,8 +37,8 @@ class User(Base):
         onupdate=func.current_timestamp(),
     )
 
-    memberships: Mapped[list[WorkspaceMembership]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+    workspace: Mapped[Workspace | None] = relationship(
+        back_populates="owner", uselist=False, foreign_keys="Workspace.owner_user_id"
     )
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -53,8 +47,18 @@ class User(Base):
 
 class Workspace(Base):
     __tablename__ = "workspaces"
+    __table_args__ = (
+        CheckConstraint(
+            "(is_claimed = 0 AND owner_user_id IS NULL) OR "
+            "(is_claimed = 1 AND owner_user_id IS NOT NULL)",
+            name="ck_workspaces_claimed_owner",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_claimed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0"), index=True
@@ -70,31 +74,9 @@ class Workspace(Base):
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
 
-    memberships: Mapped[list[WorkspaceMembership]] = relationship(
-        back_populates="workspace", cascade="all, delete-orphan"
+    owner: Mapped[User | None] = relationship(
+        back_populates="workspace", foreign_keys=[owner_user_id]
     )
-
-
-class WorkspaceMembership(Base):
-    __tablename__ = "workspace_memberships"
-    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_workspace_membership"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    role: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="member", server_default="member"
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
-    )
-
-    workspace: Mapped[Workspace] = relationship(back_populates="memberships")
-    user: Mapped[User] = relationship(back_populates="memberships")
 
 
 class AuthSession(Base):
@@ -151,8 +133,8 @@ class AccountToken(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class RegistrationThrottle(Base):
-    __tablename__ = "registration_throttles"
+class AuthActionThrottle(Base):
+    __tablename__ = "auth_action_throttles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)

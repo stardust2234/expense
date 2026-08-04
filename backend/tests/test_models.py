@@ -24,7 +24,6 @@ from app.models import (
     TransactionStatus,
     User,
     Workspace,
-    WorkspaceMembership,
 )
 
 
@@ -224,13 +223,30 @@ def test_authentication_workspace_relationships(session: Session) -> None:
         email="owner@example.com",
         display_name="Owner",
         password_hash="argon2id-placeholder",
-        is_admin=True,
     )
-    workspace = Workspace(name="Personal", is_claimed=True)
-    membership = WorkspaceMembership(user=user, workspace=workspace, role="owner")
-    session.add(membership)
+    workspace = Workspace(name="Personal", is_claimed=True, owner=user)
+    session.add(workspace)
     session.commit()
 
-    assert user.memberships == [membership]
-    assert workspace.memberships == [membership]
-    assert membership.role == "owner"
+    assert user.workspace is workspace
+    assert workspace.owner is user
+    assert workspace.owner_user_id == user.id
+
+
+def test_claimed_workspace_requires_one_unique_owner(session: Session) -> None:
+    first_owner = User(
+        email="first-owner@example.com",
+        display_name="First Owner",
+        password_hash="argon2id-placeholder",
+    )
+    session.add(Workspace(name="First", is_claimed=True, owner=first_owner))
+    session.commit()
+
+    session.add(Workspace(name="Second", is_claimed=True, owner=first_owner))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    session.add(Workspace(name="Ownerless", is_claimed=True))
+    with pytest.raises(IntegrityError):
+        session.commit()

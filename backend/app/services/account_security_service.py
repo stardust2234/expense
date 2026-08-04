@@ -3,10 +3,10 @@ from hashlib import sha256
 from secrets import token_urlsafe
 
 from argon2.exceptions import VerifyMismatchError
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.models import AccountToken, AuditEvent, AuthSession, User, WorkspaceMembership
+from app.models import AccountToken, AuditEvent, AuthSession, User
 from app.services.auth_service import _password_hasher
 
 
@@ -38,7 +38,6 @@ def issue_token(session: Session, *, user: User, purpose: str, minutes: int) -> 
             expires_at=now + timedelta(minutes=minutes),
         )
     )
-    session.commit()
     return raw
 
 
@@ -63,12 +62,18 @@ def consume_token(session: Session, *, raw: str, purpose: str) -> User:
     return user
 
 
-def change_password(session: Session, *, user: User, current: str, new: str) -> None:
+def change_password(
+    session: Session,
+    *,
+    user: User,
+    current: str,
+    new: str,
+    current_session_id: int,
+) -> None:
     if not verify_password(user, current):
         raise PasswordError("Current password is incorrect")
     user.password_hash = _password_hasher.hash(new)
-    revoke_user_sessions(session, user.id)
-    session.commit()
+    revoke_user_sessions(session, user.id, except_id=current_session_id)
 
 
 def verify_password(user: User, password: str) -> bool:
@@ -82,7 +87,6 @@ def reset_password(session: Session, *, token: str, new: str) -> User:
     user = consume_token(session, raw=token, purpose="password_reset")
     user.password_hash = _password_hasher.hash(new)
     revoke_user_sessions(session, user.id)
-    session.commit()
     return user
 
 
@@ -115,18 +119,3 @@ def audit(
             details=details or {},
         )
     )
-
-
-def workspace_users(session: Session, workspace_id: int) -> list[User]:
-    return list(
-        session.scalars(
-            select(User)
-            .join(WorkspaceMembership)
-            .where(WorkspaceMembership.workspace_id == workspace_id)
-            .order_by(User.id)
-        )
-    )
-
-
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=UTC)

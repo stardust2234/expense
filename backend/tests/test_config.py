@@ -1,6 +1,8 @@
 import pytest
 
+from app.api.auth_dependencies import get_application_settings
 from app.config import get_settings
+from app.main import create_app
 
 
 def test_settings_use_sqlite_defaults(monkeypatch) -> None:
@@ -38,3 +40,19 @@ def test_public_url_overrides_render_external_url(monkeypatch) -> None:
     settings = get_settings()
 
     assert settings.public_app_url == "https://expenses.example.com"
+
+
+def test_invalid_trusted_proxy_network_is_rejected(monkeypatch) -> None:
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "not-a-network")
+
+    with pytest.raises(ValueError, match="TRUSTED_PROXY_CIDRS"):
+        get_settings()
+
+
+@pytest.mark.anyio
+async def test_auth_dependencies_use_application_factory_settings() -> None:
+    settings = get_settings()
+    application = create_app(settings)
+    request = type("RequestStub", (), {"app": application})()
+
+    assert await get_application_settings(request) is settings

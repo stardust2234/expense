@@ -71,10 +71,15 @@ Point the hostname in `CADDY_SITE_ADDRESS` at the server and allow TCP ports 80 
 production. Set `ALLOW_REGISTRATION=true` for initial enrolment; set it to `false` if public
 self-registration is not intended after accounts have been created.
 
-The first account additionally requires `ADMIN_BOOTSTRAP_SECRET`, entered as the administrator
+Authentication throttles resolve the original address only through explicitly trusted proxies.
+The Compose default trusts loopback and Docker's private `172.16.0.0/12` network. If the proxy uses
+a different private subnet, add only that subnet to `TRUSTED_PROXY_CIDRS`; never use `0.0.0.0/0` or
+`::/0`, because that would allow clients to spoof `X-Forwarded-For`.
+
+The first account additionally requires `ADMIN_BOOTSTRAP_SECRET`, entered as the initial owner
 setup token on the registration page. Generate a separate random value with `openssl rand -hex
 32`. The server checks it inside the atomic first-user transaction and ignores it after an
-administrator exists. Remove it from `.env` after the first administrator has registered. If the
+owner exists. Remove it from `.env` after the first owner has registered. If the
 secret is missing before setup, initial registration fails closed.
 
 SQLite data, WAL files, and imported transaction records are stored under the host's `data/`
@@ -124,19 +129,45 @@ Configure `MAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, and `SMTP_PASS
 environment settings. Generate separate random values for `AUTH_THROTTLE_SECRET` and
 `ADMIN_BOOTSTRAP_SECRET`; do not copy development secrets or commit a production `.env` file.
 
+### Email delivery readiness
+
+Verified email is required for workspace access, so validate delivery before enabling public
+registration. The SMTP client requires certificate-verified STARTTLS (normally port 587 or a
+provider-supported alternative such as 2525); implicit TLS on port 465 is not supported. The
+`MAIL_FROM` address or domain must be authorised by the provider, including its required SPF and
+DKIM DNS records.
+
+After starting the VPS containers, probe DNS/TCP, STARTTLS, authentication, and SMTP readiness:
+
+```bash
+make email-check
+```
+
+Then send a real delivery test and confirm it arrives, including checking the spam folder:
+
+```bash
+make email-check EMAIL_TO=owner@example.com
+```
+
+The command exits non-zero on configuration, connectivity, TLS, authentication, or delivery
+failure. The signed-in owner can repeat these checks through `GET
+/api/auth/account/email-delivery/readiness` and `POST /api/auth/account/email-delivery/test`; the test
+message is sent only to the signed-in owner and the action is recorded in the audit log.
+Production APIs expose only a safe 503 response while detailed SMTP failures remain in server logs.
+
 The persistent disk requires a paid instance and restricts the service to one instance, which is
 also the supported topology for this SQLite application. Migrations and idempotent category seeding
 run when the container starts. Before creating the first account, set `ALLOW_REGISTRATION=true`,
 copy the generated `ADMIN_BOOTSTRAP_SECRET` from the Render environment into the registration form,
 and then restore `ALLOW_REGISTRATION=false`. Removing the bootstrap secret after the initial
-administrator is claimed is recommended.
+owner is claimed is recommended.
 
 The application uses Argon2id passwords, verified email addresses, password recovery, opaque
 server-side sessions, CSRF protection and workspace-scoped financial records. Email changes remain
 pending until the replacement address is verified, so a delivery failure cannot invalidate the
-working login address. The first registered administrator atomically claims the workspace containing
-data migrated from the original single-user installation. Administrators can manage workspace users
-and review account audit events from the Account page. Review the operational controls in
+working login address. The first registered owner atomically claims the workspace containing
+data migrated from the original single-user installation. Every account directly owns one private
+workspace, and its audit events are available from the Account page. Review the operational controls in
 [`docs/authentication-strategy.md`](docs/authentication-strategy.md) before internet exposure,
 especially encrypted backups and tested restoration.
 
