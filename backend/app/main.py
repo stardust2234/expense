@@ -48,6 +48,7 @@ def create_app(
         title=settings.app_name,
         lifespan=lifespan or create_lifespan(),
     )
+    application.state.settings = settings
     application.include_router(auth_router, prefix="/api")
     application.include_router(health_router, prefix="/api")
 

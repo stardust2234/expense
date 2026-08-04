@@ -314,7 +314,6 @@ export interface AuthUser {
   id: number;
   email: string;
   display_name: string;
-  is_admin: boolean;
   workspace_id: number;
   email_verified: boolean;
   trial_ends_at: string;

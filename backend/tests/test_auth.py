@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.database.base import Base
 from app.database.session import get_database_session
 from app.main import app
-from app.models import AuthSession, Category, User, Workspace, WorkspaceMembership
+from app.models import AccountToken, AuditEvent, AuthSession, Category, User, Workspace
 from app.services.auth_service import register_user
 
 pytestmark = pytest.mark.auth_boundary
@@ -98,7 +98,6 @@ async def test_first_registration_atomically_claims_existing_workspace_and_data(
         "id": 1,
         "email": "admin@example.com",
         "display_name": "First Admin",
-        "is_admin": True,
         "workspace_id": workspace.id,
         "email_verified": False,
         "trial_ends_at": response_user["trial_ends_at"],
@@ -111,7 +110,8 @@ async def test_first_registration_atomically_claims_existing_workspace_and_data(
     assert "a-long-test-password" not in user.password_hash
     assert workspace.is_claimed is True
     assert category.workspace_id == workspace.id
-    assert session.scalar(select(WorkspaceMembership)).role == "owner"
+    assert workspace.owner_user_id == user.id
+    assert user.workspace is workspace
     stored_session = session.scalar(select(AuthSession))
     assert stored_session is not None
     assert stored_session.token_hash not in response.headers.get("set-cookie", "")
@@ -124,7 +124,7 @@ async def test_first_registration_atomically_claims_existing_workspace_and_data(
 
 
 @pytest.mark.anyio
-async def test_second_registration_gets_private_workspace_without_admin_role(
+async def test_second_registration_is_owner_of_its_private_workspace(
     session: Session,
     client: AsyncClient,
 ) -> None:
@@ -155,10 +155,12 @@ async def test_second_registration_gets_private_workspace_without_admin_role(
     )
 
     assert response.status_code == 201
-    assert response.json()["user"]["is_admin"] is False
     assert response.json()["user"]["workspace_id"] != first_workspace.id
-    assert session.scalar(select(User).where(User.email == "first@example.com")).is_admin is True
-    assert session.scalar(select(User).where(User.email == "second@example.com")).is_admin is False
+    first = session.scalar(select(User).where(User.email == "first@example.com"))
+    second = session.scalar(select(User).where(User.email == "second@example.com"))
+    assert first is not None and first.workspace is first_workspace
+    assert second is not None and second.workspace is not None
+    assert second.workspace.owner_user_id == second.id
 
 
 @pytest.mark.anyio
@@ -237,6 +239,37 @@ async def test_login_logout_and_csrf_enforcement(session: Session, client: Async
     )
     assert login.status_code == 200
     assert (await client.get("/api/auth/session")).status_code == 200
+
+
+@pytest.mark.anyio
+async def test_csrf_endpoint_reuses_a_valid_authenticated_token_across_tabs(
+    session: Session, client: AsyncClient
+) -> None:
+    session.add(Workspace(name="Legacy", is_claimed=False))
+    session.commit()
+    public_token = await csrf(client)
+    registration = await client.post(
+        "/api/auth/register",
+        headers=protected_headers(public_token),
+        json={
+            "email": "csrf@example.com",
+            "display_name": "CSRF User",
+            "password": "correct-long-password",
+        },
+    )
+    issued_token = registration.json()["csrf_token"]
+
+    first_tab_token = await csrf(client)
+    second_tab_token = await csrf(client)
+
+    assert first_tab_token == issued_token
+    assert second_tab_token == issued_token
+    assert (
+        await client.post(
+            "/api/auth/logout",
+            headers={"X-CSRF-Token": first_tab_token},
+        )
+    ).status_code == 204
 
 
 @pytest.mark.anyio
@@ -358,11 +391,67 @@ async def test_account_deletion_removes_user_workspace_and_financial_data(
     assert session.get(User, user_id) is None
     assert session.get(Workspace, workspace_id) is None
     assert session.scalar(select(Category).where(Category.name == "Test data")) is None
+    assert session.scalar(select(AuthSession).where(AuthSession.user_id == user_id)) is None
+    assert session.scalar(select(AccountToken).where(AccountToken.user_id == user_id)) is None
     assert (await client.get("/api/auth/session")).status_code == 401
 
 
 @pytest.mark.anyio
-async def test_administrator_can_manage_workspace_users_and_read_audit(
+async def test_password_change_preserves_current_session_and_revokes_other_sessions(
+    session: Session, client: AsyncClient
+) -> None:
+    session.add(Workspace(name="Legacy", is_claimed=False))
+    session.commit()
+    token = await csrf(client)
+    registration = await client.post(
+        "/api/auth/register",
+        headers=protected_headers(token),
+        json={
+            "email": "password-change@example.com",
+            "display_name": "Password Change",
+            "password": "correct-long-password",
+        },
+    )
+    current_session_id = session.scalar(
+        select(AuthSession.id).where(AuthSession.user_id == registration.json()["user"]["id"])
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as other_client:
+        other_csrf = await csrf(other_client)
+        other_login = await other_client.post(
+            "/api/auth/login",
+            headers={"X-CSRF-Token": other_csrf},
+            json={
+                "email": "password-change@example.com",
+                "password": "correct-long-password",
+            },
+        )
+        assert other_login.status_code == 200
+        changed = await client.post(
+            "/api/auth/password/change",
+            headers={"X-CSRF-Token": registration.json()["csrf_token"]},
+            json={
+                "current_password": "correct-long-password",
+                "new_password": "replacement-long-password",
+            },
+        )
+
+        assert changed.status_code == 204
+        assert (await client.get("/api/auth/session")).status_code == 200
+        assert (await other_client.get("/api/auth/session")).status_code == 401
+
+    session.expire_all()
+    sessions = session.scalars(
+        select(AuthSession).where(AuthSession.user_id == registration.json()["user"]["id"])
+    ).all()
+    assert next(item for item in sessions if item.id == current_session_id).revoked_at is None
+    assert all(item.revoked_at is not None for item in sessions if item.id != current_session_id)
+
+
+@pytest.mark.anyio
+async def test_owner_can_read_audit_and_workspace_user_management_is_absent(
     session: Session, client: AsyncClient
 ) -> None:
     session.add(Workspace(name="Legacy", is_claimed=False))
@@ -377,21 +466,65 @@ async def test_administrator_can_manage_workspace_users_and_read_audit(
             "password": "administrator-password",
         },
     )
-    user_id = registration.json()["user"]["id"]
     token = await csrf(client)
 
     users = await client.get("/api/auth/admin/users")
-    self_demotion = await client.patch(
-        f"/api/auth/admin/users/{user_id}",
+    role_update = await client.patch(
+        f"/api/auth/admin/users/{registration.json()['user']['id']}",
         headers={"X-CSRF-Token": token},
         json={"is_admin": False},
     )
-    audit_response = await client.get("/api/auth/admin/audit")
+    audit_response = await client.get("/api/auth/account/audit")
 
-    assert users.status_code == 200
-    assert users.json()[0]["email"] == "admin@example.com"
-    assert self_demotion.status_code == 409
+    assert users.status_code == 404
+    assert role_update.status_code == 404
     assert audit_response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_owner_can_probe_and_test_email_delivery(
+    session: Session,
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session.add(Workspace(name="Legacy", is_claimed=False))
+    session.commit()
+    token = await csrf(client)
+    registration = await client.post(
+        "/api/auth/register",
+        headers=protected_headers(token),
+        json={
+            "email": "mail-admin@example.com",
+            "display_name": "Mail Admin",
+            "password": "mail-admin-long-password",
+        },
+    )
+    token = registration.json()["csrf_token"]
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "app.api.routes.email_diagnostics.check_smtp_readiness",
+        lambda _settings: calls.append("readiness"),
+    )
+    monkeypatch.setattr(
+        "app.api.routes.email_diagnostics.send_delivery_test",
+        lambda _settings, *, email: calls.append(f"delivery:{email}"),
+    )
+
+    readiness = await client.get("/api/auth/account/email-delivery/readiness")
+    delivery = await client.post(
+        "/api/auth/account/email-delivery/test",
+        headers={"X-CSRF-Token": token},
+    )
+
+    assert readiness.status_code == 200
+    assert readiness.json() == {"status": "ready"}
+    assert delivery.status_code == 202
+    assert delivery.json() == {"status": "accepted"}
+    assert calls == ["readiness", "delivery:mail-admin@example.com"]
+    session.expire_all()
+    assert session.scalar(
+        select(AuditEvent).where(AuditEvent.event_type == "account.email_delivery_tested")
+    )
 
 
 @pytest.mark.anyio
@@ -428,11 +561,10 @@ async def test_first_administrator_requires_the_one_time_bootstrap_token(
     assert missing.status_code == 403
     assert wrong.status_code == 403
     assert created.status_code == 201
-    assert created.json()["user"]["is_admin"] is True
     assert (await client.get("/api/auth/bootstrap-status")).json() == {"required": False}
 
 
-def test_concurrent_initial_registrations_elect_exactly_one_administrator(
+def test_concurrent_initial_registrations_create_one_workspace_per_owner(
     tmp_path: Path,
 ) -> None:
     engine = create_engine(
@@ -446,7 +578,7 @@ def test_concurrent_initial_registrations_elect_exactly_one_administrator(
 
     def create(email: str) -> int:
         with Session(engine, expire_on_commit=False) as database_session:
-            return register_user(
+            issued = register_user(
                 database_session,
                 email=email,
                 display_name=email.split("@", maxsplit=1)[0],
@@ -454,19 +586,16 @@ def test_concurrent_initial_registrations_elect_exactly_one_administrator(
                 session_days=7,
                 bootstrap_secret=BOOTSTRAP_TOKEN,
                 supplied_bootstrap_token=BOOTSTRAP_TOKEN,
-            ).user.id
+            )
+            database_session.commit()
+            return issued.user.id
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         user_ids = list(executor.map(create, ["one@example.com", "two@example.com"]))
 
     with Session(engine) as verification_session:
-        users = verification_session.scalars(select(User).where(User.id.in_(user_ids))).all()
         workspaces = verification_session.scalars(select(Workspace)).all()
-        memberships = verification_session.scalars(
-            select(WorkspaceMembership).where(WorkspaceMembership.user_id.in_(user_ids))
-        ).all()
-    assert sum(user.is_admin for user in users) == 1
-    assert len({membership.workspace_id for membership in memberships}) == 2
+    assert {workspace.owner_user_id for workspace in workspaces} == set(user_ids)
     assert sum(workspace.is_claimed for workspace in workspaces) == 2
 
 
@@ -603,3 +732,76 @@ async def test_login_is_throttled_after_repeated_failures(
         json={"email": "missing@example.com", "password": "wrong-password"},
     )
     assert blocked.status_code == 429
+
+
+@pytest.mark.anyio
+async def test_login_aggregate_ip_throttle_blocks_identity_rotation(client: AsyncClient) -> None:
+    token = await csrf(client)
+    attempts = [
+        await client.post(
+            "/api/auth/login",
+            headers={"X-CSRF-Token": token},
+            json={"email": f"missing-{index}@example.com", "password": "wrong-password"},
+        )
+        for index in range(20)
+    ]
+    blocked = await client.post(
+        "/api/auth/login",
+        headers={"X-CSRF-Token": token},
+        json={"email": "another-missing@example.com", "password": "wrong-password"},
+    )
+
+    assert all(response.status_code == 401 for response in attempts)
+    assert blocked.status_code == 429
+
+
+@pytest.mark.anyio
+async def test_verification_resend_and_password_reset_are_throttled(
+    session: Session,
+    client: AsyncClient,
+) -> None:
+    session.add(Workspace(name="Legacy", is_claimed=False))
+    session.commit()
+    token = await csrf(client)
+    registration = await client.post(
+        "/api/auth/register",
+        headers=protected_headers(token),
+        json={
+            "email": "email-throttle@example.com",
+            "display_name": "Email Throttle",
+            "password": "email-throttle-password",
+        },
+    )
+    token = registration.json()["csrf_token"]
+
+    resend = [
+        await client.post(
+            "/api/auth/verification/resend",
+            headers={"X-CSRF-Token": token},
+        )
+        for _ in range(4)
+    ]
+    reset = [
+        await client.post(
+            "/api/auth/password-reset/request",
+            json={"email": "missing@example.com"},
+        )
+        for _ in range(4)
+    ]
+
+    assert [response.status_code for response in resend] == [202, 202, 202, 429]
+    assert [response.status_code for response in reset] == [202, 202, 202, 429]
+
+
+@pytest.mark.anyio
+async def test_email_aggregate_ip_throttle_blocks_identity_rotation(client: AsyncClient) -> None:
+    attempts = [
+        await client.post(
+            "/api/auth/password-reset/request",
+            json={"email": f"missing-{index}@example.com"},
+        )
+        for index in range(20)
+    ]
+
+    assert [response.status_code for response in attempts[:19]] == [202] * 19
+    assert attempts[19].status_code == 429

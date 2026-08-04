@@ -21,9 +21,7 @@ const showDeleteAccount = ref(false);
 const deletePassword = ref("");
 const deleteConfirmation = ref("");
 const deleteBusy = ref(false);
-type AdminUser = Awaited<ReturnType<typeof api.adminUsers>>[number];
-type AuditEvent = Awaited<ReturnType<typeof api.adminAudit>>[number];
-const workspaceUsers = ref<AdminUser[]>([]);
+type AuditEvent = Awaited<ReturnType<typeof api.accountAudit>>[number];
 const auditEvents = ref<AuditEvent[]>([]);
 
 function errorMessage(caught: unknown): string {
@@ -37,7 +35,8 @@ async function changePassword() {
   try {
     await api.changePassword(currentPassword.value, newPassword.value);
     message.value = t("account.passwordChanged");
-    await router.replace("/login");
+    currentPassword.value = "";
+    newPassword.value = "";
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
@@ -75,22 +74,9 @@ async function deleteAccount() {
   }
 }
 
-async function loadAdministration() {
-  if (!currentUser.value?.is_admin) return;
+async function loadAuditEvents() {
   try {
-    [workspaceUsers.value, auditEvents.value] = await Promise.all([
-      api.adminUsers(),
-      api.adminAudit(),
-    ]);
-  } catch (caught) {
-    error.value = errorMessage(caught);
-  }
-}
-
-async function updateWorkspaceUser(user: AdminUser, changes: { is_admin?: boolean; is_active?: boolean }) {
-  try {
-    const updated = await api.updateAdminUser(user.id, changes);
-    workspaceUsers.value = workspaceUsers.value.map((item) => item.id === updated.id ? updated : item);
+    auditEvents.value = await api.accountAudit();
   } catch (caught) {
     error.value = errorMessage(caught);
   }
@@ -98,7 +84,7 @@ async function updateWorkspaceUser(user: AdminUser, changes: { is_admin?: boolea
 
 onMounted(() => {
   email.value = currentUser.value?.email ?? "";
-  void loadAdministration();
+  void loadAuditEvents();
 });
 </script>
 
@@ -113,24 +99,6 @@ onMounted(() => {
     </header>
 
     <p v-if="error" class="message error-message">{{ error }}</p>
-
-    <article v-if="currentUser?.is_admin" class="panel account-panel admin-panel">
-      <h3>{{ t("account.workspaceUsers") }}</h3>
-      <p class="account-status">{{ t("account.workspaceUsersHelp") }}</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>{{ t("common.name") }}</th><th>{{ t("auth.email") }}</th><th>{{ t("account.verifiedShort") }}</th><th>{{ t("account.active") }}</th><th>{{ t("account.administrator") }}</th></tr></thead>
-          <tbody>
-            <tr v-for="user in workspaceUsers" :key="user.id">
-              <td>{{ user.display_name }}</td><td>{{ user.email }}</td>
-              <td>{{ user.email_verified_at ? t("common.yes") : t("common.no") }}</td>
-              <td><input type="checkbox" :checked="user.is_active" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_active: ($event.target as HTMLInputElement).checked })" /></td>
-              <td><input type="checkbox" :checked="user.is_admin" :disabled="user.id === currentUser?.id" @change="updateWorkspaceUser(user, { is_admin: ($event.target as HTMLInputElement).checked })" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </article>
 
     <article class="panel account-panel">
       <h3>{{ t("account.security") }}</h3>
@@ -202,7 +170,7 @@ onMounted(() => {
       </form>
     </article>
 
-    <article v-if="currentUser?.is_admin" class="panel account-panel admin-panel">
+    <article class="panel account-panel admin-panel">
       <h3>{{ t("account.auditTitle") }}</h3>
       <p v-if="!auditEvents.length" class="table-empty">{{ t("account.noAuditEvents") }}</p>
       <ul v-else class="audit-list">

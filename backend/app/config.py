@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from ipaddress import ip_network
 from os import getenv
 from pathlib import Path
 
@@ -30,6 +31,7 @@ class Settings:
     smtp_password: str | None
     mail_from: str
     public_app_url: str
+    trusted_proxy_cidrs: tuple[str, ...]
 
 
 def _boolean(key: str, default: bool) -> bool:
@@ -58,6 +60,16 @@ def get_settings() -> Settings:
     admin_bootstrap_secret = getenv("ADMIN_BOOTSTRAP_SECRET")
     if not admin_bootstrap_secret and app_env != "production":
         admin_bootstrap_secret = "development-only-admin-bootstrap-secret"
+    trusted_proxy_cidrs = tuple(
+        item.strip()
+        for item in getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").split(",")
+        if item.strip()
+    )
+    try:
+        for cidr in trusted_proxy_cidrs:
+            ip_network(cidr, strict=False)
+    except ValueError as error:
+        raise ValueError("TRUSTED_PROXY_CIDRS must contain valid IP networks") from error
     return Settings(
         app_name=_required("APP_NAME", "expense-categoriser"),
         app_env=app_env,
@@ -75,4 +87,5 @@ def get_settings() -> Settings:
         public_app_url=_required(
             "PUBLIC_APP_URL", getenv("RENDER_EXTERNAL_URL", "https://localhost:5173")
         ),
+        trusted_proxy_cidrs=trusted_proxy_cidrs,
     )

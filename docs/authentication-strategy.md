@@ -4,12 +4,12 @@
 
 The backend supports Argon2id password registration and login, verified email addresses, password
 recovery, hashed opaque server sessions, CSRF tokens, logout/revocation, account deletion, audit
-logging, and atomic first-administrator ownership of the migrated workspace.
+logging, and atomic initial-owner claiming of the migrated workspace.
 Production access must pass through Caddy over HTTPS so the secure session cookie is transmitted.
 
-User, opaque-session, workspace, membership and persistent login-throttle tables are present. All
+User, opaque-session, workspace and persistent login-throttle tables are present. All
 pre-existing financial records belong to one initial workspace, ownership is non-null, and the
-first registered administrator atomically claims that workspace. Protected API requests, exports,
+first registered owner atomically claims that workspace. Protected API requests, exports,
 inference and worker processing are scoped through the authenticated workspace.
 
 Routing is client-side navigation, not an access-control boundary. Every API endpoint must enforce
@@ -23,9 +23,12 @@ Use server-managed sessions for every workspace:
 - issue a cryptographically random, opaque session identifier after login;
 - store only a hash of that identifier in SQLite, with creation, last-used, and expiry timestamps;
 - send the identifier in a `Secure`, `HttpOnly`, `SameSite=Lax` cookie;
-- rotate the session after login and invalidate it on logout or password change;
+- rotate the session after login, invalidate it on logout, and revoke other sessions after a
+  password change;
 - require a CSRF token for every state-changing request;
-- rate-limit login attempts without storing plaintext email/IP throttle identities or logging
+- reuse a valid authenticated CSRF token so one browser tab cannot invalidate another;
+- rate-limit login and email actions with both identity-plus-IP and aggregate-IP buckets, without
+  storing plaintext email/IP throttle identities or logging
   credentials, cookies, uploaded statement contents, or CSRF tokens.
 
 Do not keep bearer tokens or session identifiers in `localStorage`. The frontend should call
@@ -51,24 +54,22 @@ Implemented authentication and account endpoints are:
 - `GET /api/auth/sessions`
 - `DELETE /api/auth/sessions/id/{session_id}`
 - `POST /api/auth/sessions/revoke-others`
-- `GET /api/auth/admin/users`
-- `PATCH /api/auth/admin/users/{user_id}`
-- `GET /api/auth/admin/audit`
+- `GET /api/auth/account/audit`
 
 Email address changes are staged in `pending_email`. The current login address remains valid until
 the new address proves ownership with its single-use token. A production delivery failure clears
 the pending address rather than locking the user out. Database uniqueness conflicts are returned as
 controlled `409` responses.
 
-## Multi-user authorisation
+## Workspace ownership
 
 Ownership covers import batches/background jobs, raw transactions, expenses, merchants, aliases,
 rules, categories, plans, commitments, allowances and recurring opportunities. Global ORM policy
 scopes reads, ID lookups, updates and deletes; worker sessions adopt the claimed batch workspace.
 Cross-user tests prove that listing and guessed-ID mutation cannot cross the workspace boundary.
 
-Shared categories or household access should be introduced as an explicit workspace/membership
-model rather than by weakening ownership filters.
+Each account directly owns one private workspace through `workspaces.owner_user_id`. The owner
+relationship is unique in both directions; there are no workspace roles or shared memberships.
 
 ## Later options
 

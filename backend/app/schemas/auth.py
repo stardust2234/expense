@@ -40,7 +40,6 @@ class AuthenticatedUser(BaseModel):
     id: int
     email: str
     display_name: str
-    is_admin: bool
     workspace_id: int
     email_verified: bool
     trial_ends_at: datetime
@@ -103,17 +102,3 @@ class SessionItem(BaseModel):
     last_used_at: datetime
     expires_at: datetime
     current: bool
-
-
-class UserAdminItem(BaseModel):
-    id: int
-    email: str
-    display_name: str
-    is_admin: bool
-    is_active: bool
-    email_verified_at: datetime | None
-
-
-class UserAdminUpdate(BaseModel):
-    is_active: bool | None = None
-    is_admin: bool | None = None

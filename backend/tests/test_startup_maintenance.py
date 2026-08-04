@@ -5,7 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database.base import Base
 from app.main import create_app, create_lifespan
-from app.models import Workspace
+from app.models import User, Workspace
 from app.services.startup_maintenance import run_startup_maintenance
 
 
@@ -18,13 +18,13 @@ def workspace_session_factory():
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory() as session:
-        session.add_all(
-            [
-                Workspace(name="First", is_claimed=True),
-                Workspace(name="Second", is_claimed=True),
-                Workspace(name="Third", is_claimed=True),
-            ]
-        )
+        for index, name in enumerate(("First", "Second", "Third"), start=1):
+            owner = User(
+                email=f"owner{index}@example.com",
+                display_name=f"Owner {index}",
+                password_hash="argon2id-placeholder",
+            )
+            session.add(Workspace(name=name, is_claimed=True, owner=owner))
         session.commit()
     return factory
 

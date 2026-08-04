@@ -1,15 +1,6 @@
 import type { AuthSession } from "../types/api";
 import { request, setApiCsrfToken } from "./request";
 
-export type AdminUser = {
-  id: number;
-  email: string;
-  display_name: string;
-  is_admin: boolean;
-  is_active: boolean;
-  email_verified_at: string | null;
-};
-
 export type AuditEvent = {
   id: number;
   event_type: string;
@@ -45,8 +36,6 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) => request<void>("/auth/password/change", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
   changeEmail: (email: string, currentPassword: string) => request<{ status: string; development_token: string | null }>("/auth/account/email", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, current_password: currentPassword }) }),
   deleteAccount: (currentPassword: string, confirmation: string) => request<void>("/auth/account", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current_password: currentPassword, confirmation }) }),
-  adminUsers: () => request<AdminUser[]>("/auth/admin/users"),
-  updateAdminUser: (id: number, changes: { is_admin?: boolean; is_active?: boolean }) => request<AdminUser>(`/auth/admin/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }),
-  adminAudit: () => request<AuditEvent[]>("/auth/admin/audit"),
+  accountAudit: () => request<AuditEvent[]>("/auth/account/audit"),
 };
 

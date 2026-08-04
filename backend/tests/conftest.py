@@ -16,8 +16,16 @@ def assign_test_workspace(session: Session, _flush_context, _instances) -> None:
     ]
     if not missing:
         return
-    session.connection().exec_driver_sql(
-        "INSERT OR IGNORE INTO workspaces (id, name, is_claimed) VALUES (1, 'Test workspace', 1)"
+    connection = session.connection()
+    connection.exec_driver_sql(
+        "INSERT OR IGNORE INTO users "
+        "(id, email, display_name, password_hash) VALUES "
+        "(1, 'test-owner@example.com', 'Test Owner', 'test-placeholder')"
+    )
+    connection.exec_driver_sql(
+        "INSERT OR IGNORE INTO workspaces "
+        "(id, owner_user_id, name, is_claimed) VALUES "
+        "(1, 1, 'Test workspace', 1)"
     )
     for record in missing:
         record.workspace_id = 1

@@ -15,12 +15,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
+    AuthActionThrottle,
     AuthSession,
     LoginThrottle,
-    RegistrationThrottle,
     User,
     Workspace,
-    WorkspaceMembership,
 )
 from app.services.category_seed_service import seed_categories
 
@@ -81,9 +80,9 @@ def register_user(
     bootstrap_secret: str | None = None,
     supplied_bootstrap_token: str | None = None,
 ) -> IssuedSession:
+    if session.get_bind().dialect.name == "sqlite":
+        session.execute(text("BEGIN IMMEDIATE"))
     try:
-        if session.get_bind().dialect.name == "sqlite":
-            session.execute(text("BEGIN IMMEDIATE"))
         if session.scalar(select(User.id).where(User.email == email)) is not None:
             raise RegistrationConflictError("An account with this email already exists")
 
@@ -100,7 +99,6 @@ def register_user(
             email=email,
             display_name=display_name,
             password_hash=_password_hasher.hash(password),
-            is_admin=first_user,
         )
         session.add(user)
         session.flush()
@@ -114,30 +112,22 @@ def register_user(
                 .limit(1)
             )
         if workspace is None:
-            workspace = Workspace(name=f"{display_name}'s workspace", is_claimed=True)
+            workspace = Workspace(name=f"{display_name}'s workspace", is_claimed=True, owner=user)
             session.add(workspace)
             session.flush()
         else:
             workspace.is_claimed = True
             workspace.name = f"{display_name}'s workspace"
+            workspace.owner = user
 
-        session.add(WorkspaceMembership(user=user, workspace=workspace, role="owner"))
         session.info["workspace_id"] = workspace.id
         seed_categories(session, commit=False)
         issued = _create_session(
             session, user=user, workspace_id=workspace.id, session_days=session_days
         )
-        session.commit()
         return issued
-    except (BootstrapProtectionError, RegistrationConflictError):
-        session.rollback()
-        raise
     except IntegrityError as error:
-        session.rollback()
         raise RegistrationConflictError("An account with this email already exists") from error
-    except Exception:
-        session.rollback()
-        raise
 
 
 def administrator_bootstrap_required(session: Session) -> bool:
@@ -150,24 +140,27 @@ def login_user(
     email: str,
     password: str,
     session_days: int,
-    throttle_key: str,
+    identity_throttle_key: str,
+    ip_throttle_key: str,
     existing_token: str | None = None,
 ) -> IssuedSession:
-    _check_login_throttle(session, throttle_key)
+    _check_login_throttle(session, identity_throttle_key)
+    _check_login_throttle(session, ip_throttle_key)
     user = session.scalar(
-        select(User).where(User.email == email).options(selectinload(User.memberships))
+        select(User).where(User.email == email).options(selectinload(User.workspace))
     )
     candidate_hash = user.password_hash if user is not None else _dummy_hash
     try:
         valid = _password_hasher.verify(candidate_hash, password)
     except (VerifyMismatchError, InvalidHashError):
         valid = False
-    if user is None or not valid or not user.is_active or not user.memberships:
-        _record_login_failure(session, throttle_key)
+    if user is None or not valid or user.workspace is None:
+        _record_login_failure(session, identity_throttle_key, limit=5)
+        _record_login_failure(session, ip_throttle_key, limit=20)
         raise AuthenticationError("Invalid email or password")
     if _password_hasher.check_needs_rehash(user.password_hash):
         user.password_hash = _password_hasher.hash(password)
-    _clear_login_failures(session, throttle_key)
+    _clear_login_failures(session, identity_throttle_key)
     if existing_token:
         existing = session.scalar(
             select(AuthSession).where(AuthSession.token_hash == _hash_token(existing_token))
@@ -177,10 +170,9 @@ def login_user(
     issued = _create_session(
         session,
         user=user,
-        workspace_id=user.memberships[0].workspace_id,
+        workspace_id=user.workspace.id,
         session_days=session_days,
     )
-    session.commit()
     return issued
 
 
@@ -207,11 +199,7 @@ def get_auth_session(session: Session, raw_token: str | None) -> tuple[AuthSessi
     auth_session = session.scalar(
         select(AuthSession)
         .where(AuthSession.token_hash == _hash_token(raw_token))
-        .options(
-            selectinload(AuthSession.user)
-            .selectinload(User.memberships)
-            .selectinload(WorkspaceMembership.workspace)
-        )
+        .options(selectinload(AuthSession.user).selectinload(User.workspace))
     )
     now = datetime.now(UTC)
     if auth_session is None or auth_session.revoked_at is not None:
@@ -219,11 +207,10 @@ def get_auth_session(session: Session, raw_token: str | None) -> tuple[AuthSessi
     expires_at = auth_session.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=UTC)
-    if expires_at <= now or not auth_session.user.is_active or not auth_session.user.memberships:
+    if expires_at <= now or auth_session.user.workspace is None:
         return None
     auth_session.last_used_at = now
-    session.commit()
-    return auth_session, auth_session.user.memberships[0].workspace_id
+    return auth_session, auth_session.user.workspace.id
 
 
 def verify_csrf(auth_session: AuthSession, supplied_token: str | None) -> bool:
@@ -232,53 +219,99 @@ def verify_csrf(auth_session: AuthSession, supplied_token: str | None) -> bool:
     )
 
 
-def rotate_csrf(session: Session, auth_session: AuthSession) -> str:
+def rotate_csrf(auth_session: AuthSession) -> str:
     token = token_urlsafe(32)
     auth_session.csrf_token_hash = _hash_token(token)
-    session.commit()
     return token
 
 
 def revoke_session(session: Session, auth_session: AuthSession) -> None:
     auth_session.revoked_at = datetime.now(UTC)
-    session.commit()
 
 
-def login_throttle_key(*, email: str, client_ip: str, secret: str) -> str:
-    identity = f"{email.strip().casefold()}\0{client_ip}".encode()
-    return hmac_new(secret.encode(), identity, sha256).hexdigest()
+def login_throttle_keys(*, email: str, client_ip: str, secret: str) -> tuple[str, str]:
+    identity = f"login-identity\0{email.strip().casefold()}\0{client_ip}".encode()
+    aggregate_ip = f"login-ip\0{client_ip}".encode()
+    return (
+        hmac_new(secret.encode(), identity, sha256).hexdigest(),
+        hmac_new(secret.encode(), aggregate_ip, sha256).hexdigest(),
+    )
 
 
 def enforce_registration_throttle(session: Session, *, client_ip: str, secret: str) -> None:
-    key = hmac_new(secret.encode(), client_ip.encode(), sha256).hexdigest()
+    key = hmac_new(secret.encode(), f"registration\0{client_ip}".encode(), sha256).hexdigest()
+    _enforce_action_throttle(
+        session,
+        key=key,
+        limit=5,
+        window=timedelta(hours=1),
+        message="Too many registration attempts; try again later",
+    )
+
+
+def enforce_email_throttle(
+    session: Session,
+    *,
+    action: str,
+    identity: str,
+    client_ip: str,
+    secret: str,
+) -> None:
+    aggregate_material = f"email-ip\0{client_ip}".encode()
+    aggregate_key = hmac_new(secret.encode(), aggregate_material, sha256).hexdigest()
+    _enforce_action_throttle(
+        session,
+        key=aggregate_key,
+        limit=20,
+        window=timedelta(hours=1),
+        message="Too many email requests; try again later",
+    )
+    identity_material = f"{action}\0{identity.strip().casefold()}\0{client_ip}".encode()
+    identity_key = hmac_new(secret.encode(), identity_material, sha256).hexdigest()
+    _enforce_action_throttle(
+        session,
+        key=identity_key,
+        limit=4,
+        window=timedelta(hours=1),
+        message="Too many email requests; try again later",
+    )
+
+
+def _enforce_action_throttle(
+    session: Session,
+    *,
+    key: str,
+    limit: int,
+    window: timedelta,
+    message: str,
+) -> None:
     now = datetime.now(UTC)
-    window_start = now - timedelta(hours=1)
-    blocked_until = now + timedelta(hours=1)
-    statement = sqlite_insert(RegistrationThrottle).values(
+    window_start = now - window
+    blocked_until = now + window
+    statement = sqlite_insert(AuthActionThrottle).values(
         key_hash=key, attempts=1, window_started_at=now, blocked_until=None
     )
     statement = statement.on_conflict_do_update(
-        index_elements=[RegistrationThrottle.key_hash],
+        index_elements=[AuthActionThrottle.key_hash],
         set_={
             "attempts": case(
-                (RegistrationThrottle.window_started_at <= window_start, 1),
-                else_=RegistrationThrottle.attempts + 1,
+                (AuthActionThrottle.window_started_at <= window_start, 1),
+                else_=AuthActionThrottle.attempts + 1,
             ),
             "window_started_at": case(
-                (RegistrationThrottle.window_started_at <= window_start, now),
-                else_=RegistrationThrottle.window_started_at,
+                (AuthActionThrottle.window_started_at <= window_start, now),
+                else_=AuthActionThrottle.window_started_at,
             ),
             "blocked_until": case(
-                (RegistrationThrottle.window_started_at <= window_start, None),
-                (RegistrationThrottle.attempts + 1 >= 5, blocked_until),
-                else_=RegistrationThrottle.blocked_until,
+                (AuthActionThrottle.window_started_at <= window_start, None),
+                (AuthActionThrottle.attempts + 1 >= limit, blocked_until),
+                else_=AuthActionThrottle.blocked_until,
             ),
         },
-    ).returning(RegistrationThrottle.attempts, RegistrationThrottle.blocked_until)
+    ).returning(AuthActionThrottle.attempts, AuthActionThrottle.blocked_until)
     attempts, blocked = session.execute(statement).one()
-    session.commit()
-    if attempts >= 5 or (blocked is not None and _aware(blocked) > now):
-        raise LoginThrottledError("Too many registration attempts; try again later")
+    if attempts >= limit or (blocked is not None and _aware(blocked) > now):
+        raise LoginThrottledError(message)
 
 
 def _aware(value: datetime) -> datetime:
@@ -295,7 +328,7 @@ def _check_login_throttle(session: Session, key_hash: str) -> None:
         raise LoginThrottledError("Too many login attempts; try again later")
 
 
-def _record_login_failure(session: Session, key_hash: str) -> None:
+def _record_login_failure(session: Session, key_hash: str, *, limit: int) -> None:
     now = datetime.now(UTC)
     window_start = now - timedelta(minutes=15)
     blocked_until = now + timedelta(minutes=15)
@@ -315,13 +348,12 @@ def _record_login_failure(session: Session, key_hash: str) -> None:
             ),
             "blocked_until": case(
                 (LoginThrottle.window_started_at <= window_start, None),
-                (LoginThrottle.failed_attempts + 1 >= 5, blocked_until),
+                (LoginThrottle.failed_attempts + 1 >= limit, blocked_until),
                 else_=LoginThrottle.blocked_until,
             ),
         },
     )
     session.execute(statement)
-    session.commit()
 
 
 def _clear_login_failures(session: Session, key_hash: str) -> None:

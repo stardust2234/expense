@@ -9,7 +9,6 @@ const authMock = vi.hoisted(() => ({
     id: 1,
     email: "owner@example.com",
     display_name: "Owner",
-    is_admin: true,
     workspace_id: 1,
     email_verified: true,
   } },
@@ -20,9 +19,7 @@ const authMock = vi.hoisted(() => ({
 const apiMock = vi.hoisted(() => ({
   changePassword: vi.fn(),
   changeEmail: vi.fn().mockResolvedValue({ status: "verification_required", development_token: "token" }),
-  adminUsers: vi.fn().mockResolvedValue([{ id: 1, email: "owner@example.com", display_name: "Owner", is_admin: true, is_active: true, email_verified_at: "2026-01-01" }]),
-  adminAudit: vi.fn().mockResolvedValue([]),
-  updateAdminUser: vi.fn(),
+  accountAudit: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("vue-router", () => ({ useRouter: () => routerMock }));
@@ -48,10 +45,11 @@ afterEach(() => {
 });
 
 describe("account management", () => {
-  it("shows profile, workspace administration and no duplicate logout or sessions card", async () => {
+  it("shows the owner profile without workspace-user administration or duplicate logout", async () => {
     const host = await render();
     expect(host.textContent).toContain("owner@example.com");
-    expect(host.textContent).toContain("Workspace users");
+    expect(host.textContent).not.toContain("Workspace users");
+    expect(host.textContent).toContain("Security");
     expect(host.textContent).not.toContain("Active sessions");
     expect(host.textContent).not.toContain("Sign out");
   });
@@ -70,6 +68,27 @@ describe("account management", () => {
     await nextTick();
     expect(apiMock.changeEmail).toHaveBeenCalledWith("new@example.com", "current-password");
     expect(routerMock.push).toHaveBeenCalledWith({ name: "verify-email", query: { token: "token" } });
+  });
+
+  it("keeps the current session after changing the password", async () => {
+    apiMock.changePassword.mockResolvedValueOnce(undefined);
+    const host = await render();
+    const passwordForm = host.querySelectorAll("form")[0];
+    const inputs = passwordForm.querySelectorAll("input");
+    (inputs[0] as HTMLInputElement).value = "current-password";
+    inputs[0].dispatchEvent(new Event("input"));
+    (inputs[1] as HTMLInputElement).value = "replacement-password";
+    inputs[1].dispatchEvent(new Event("input"));
+    passwordForm.dispatchEvent(new Event("submit"));
+    await Promise.resolve();
+    await nextTick();
+
+    expect(apiMock.changePassword).toHaveBeenCalledWith(
+      "current-password",
+      "replacement-password",
+    );
+    expect(routerMock.replace).not.toHaveBeenCalledWith("/login");
+    expect(host.textContent).toContain("Other signed-in sessions have been revoked");
   });
 
   it("renders destructive account controls in French", async () => {
