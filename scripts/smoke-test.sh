@@ -9,9 +9,9 @@ CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT:-18443}"
 export CADDY_HTTP_PORT
 export CADDY_HTTPS_PORT
 export CADDY_SITE_ADDRESS="${CADDY_SITE_ADDRESS:-localhost}"
-export AUTH0_DOMAIN="${AUTH0_DOMAIN:-example.auth0.com}"
+export AUTH0_DOMAIN="${AUTH0_DOMAIN:-ci-tenant.example.auth0.com}"
 export AUTH0_CLIENT_ID="${AUTH0_CLIENT_ID:-smoke-test-client}"
-export AUTH0_AUDIENCE="${AUTH0_AUDIENCE:-https://api.folio.local}"
+export AUTH0_AUDIENCE="${AUTH0_AUDIENCE:-https://api.ci.folio.example}"
 
 cleanup() {
   ${DOCKER_COMPOSE} -f "${COMPOSE_FILE}" down >/dev/null 2>&1 || true
