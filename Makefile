@@ -97,7 +97,7 @@ frontend-build: ## Build the frontend bundle
 	@cd frontend && npm run build
 
 frontend-audit: ## Fail on high or critical npm vulnerabilities
-	@cd frontend && npm audit --audit-level=high
+	@cd frontend && npm audit --package-lock-only --audit-level=high
 
 dependency-audit: ## Audit Python and JavaScript dependencies
 	@$(MAKE) backend-audit
