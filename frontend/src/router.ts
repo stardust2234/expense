@@ -7,6 +7,7 @@ import {
 } from "vue-router";
 
 import { auth } from "./auth";
+import type { AuthUser } from "./types/api";
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -27,8 +28,6 @@ export const routes: RouteRecordRaw[] = [
     component: () => import("./views/LoginView.vue"),
     meta: { public: true, authLayout: true },
   },
-  { path: "/verify-email", name: "verify-email", component: () => import("./views/VerifyEmailView.vue"), meta: { public: true, authLayout: true } },
-  { path: "/reset-password", name: "reset-password", component: () => import("./views/ResetPasswordView.vue"), meta: { public: true, authLayout: true } },
   {
     path: "/dashboard",
     name: "dashboard",
@@ -81,6 +80,7 @@ export const routes: RouteRecordRaw[] = [
 export function createAppRouter(
   history: RouterHistory = createWebHistory(),
   sessionGuard: () => Promise<boolean> = () => auth.ensureSession(),
+  currentUser: () => AuthUser | null = () => auth.user.value,
 ): Router {
   const router = createRouter({ history, routes });
   router.onError((error, to) => {
@@ -91,14 +91,11 @@ export function createAppRouter(
     if (!to.meta.public && !authenticated) {
       return { name: "login", query: { redirect: to.fullPath } };
     }
-    if (!to.meta.public && authenticated && auth.user.value?.email_verified === false) {
-      return { name: "verify-email" };
-    }
     if (
       !to.meta.public
       && to.name !== "account"
       && authenticated
-      && auth.user.value?.access_active === false
+      && currentUser()?.access_active === false
     ) {
       return { name: "landing", hash: "#pricing", query: { trial: "expired" } };
     }

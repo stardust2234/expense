@@ -21,11 +21,7 @@ from app.models.recurring_cost_opportunity import (
 )
 
 __all__ = [
-    "AccountToken",
     "AllowanceType",
-    "AuditEvent",
-    "AuthActionThrottle",
-    "AuthSession",
     "CategorisationRule",
     "Category",
     "Commitment",
@@ -33,7 +29,6 @@ __all__ = [
     "CycleAllowance",
     "Expense",
     "ImportBatch",
-    "LoginThrottle",
     "Merchant",
     "MerchantAlias",
     "OpportunityDecision",
@@ -47,12 +42,4 @@ __all__ = [
     "User",
     "Workspace",
 ]
-from app.models.auth import (
-    AccountToken,
-    AuditEvent,
-    AuthActionThrottle,
-    AuthSession,
-    LoginThrottle,
-    User,
-    Workspace,
-)
+from app.models.auth import User, Workspace

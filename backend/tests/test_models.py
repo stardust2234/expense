@@ -220,9 +220,9 @@ def test_deleting_payment_cycle_removes_plan_but_keeps_expense(session: Session)
 
 def test_authentication_workspace_relationships(session: Session) -> None:
     user = User(
+        auth0_subject="auth0|owner",
         email="owner@example.com",
         display_name="Owner",
-        password_hash="argon2id-placeholder",
     )
     workspace = Workspace(name="Personal", is_claimed=True, owner=user)
     session.add(workspace)
@@ -235,9 +235,9 @@ def test_authentication_workspace_relationships(session: Session) -> None:
 
 def test_claimed_workspace_requires_one_unique_owner(session: Session) -> None:
     first_owner = User(
+        auth0_subject="auth0|first-owner",
         email="first-owner@example.com",
         display_name="First Owner",
-        password_hash="argon2id-placeholder",
     )
     session.add(Workspace(name="First", is_claimed=True, owner=first_owner))
     session.commit()

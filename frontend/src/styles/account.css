@@ -1,6 +1,7 @@
 .account-menu { position: relative; }
 .account-trigger { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
 .account-dropdown { position: absolute; z-index: 50; top: calc(100% + 9px); right: 0; width: 210px; padding: 7px; border: 1px solid var(--glass-border-hover); border-radius: 13px; background: rgba(17, 22, 34, .98); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); backdrop-filter: blur(20px); }
+.account-dropdown .account-identity { overflow: hidden; margin: 2px 10px 6px; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .account-dropdown a, .account-dropdown button { width: 100%; min-height: 39px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; color: var(--text-secondary); border: 0; border-radius: 9px; background: transparent; font-size: 13px; text-align: left; text-decoration: none; }
 .account-dropdown a:hover, .account-dropdown button:hover { color: var(--text-primary); background: var(--glass-hover); }
 .account-dropdown .logout-menu-item { margin-top: 5px; color: var(--error); border-top: 1px solid var(--glass-border); border-radius: 0 0 9px 9px; }
@@ -8,18 +9,4 @@
 .account-panel { padding: 22px; }
 .account-panel > h3 { margin: 0; font-size: 17px; }
 .account-status { margin: 8px 0 0; color: var(--text-secondary); }
-.account-form { display: grid; gap: 14px; max-width: 520px; margin-top: 20px; }
-.account-form .primary-button { justify-self: start; }
-.account-form + .message { max-width: 520px; margin-top: 14px; }
-.danger-zone { border-color: rgba(251, 113, 133, .32); }
-.danger-zone > h3 { color: var(--error); }
-.delete-account-link { margin-top: 14px; }
-.danger-actions { display: flex; align-items: center; gap: 10px; }
-.danger-button { min-height: 42px; padding: 0 18px; color: #fff; border: 1px solid rgba(251,113,133,.5); border-radius: 9px; background: rgba(190, 24, 93, .85); font-weight: 700; }
-.danger-button:hover:not(:disabled) { background: rgb(190, 24, 93); }
-.admin-panel .table-wrap { margin: 18px -22px -22px; }
-.admin-panel input[type="checkbox"] { width: 18px; height: 18px; }
-.audit-list { display: grid; gap: 0; margin: 16px 0 0; padding: 0; list-style: none; }
-.audit-list li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--glass-border); }
-.audit-list span { color: var(--text-muted); font-size: 12px; }
 

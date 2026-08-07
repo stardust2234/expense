@@ -16,6 +16,7 @@ from app.api.routes.review_queue import router as review_queue_router
 from app.api.routes.rules import router as rules_router
 from app.api.routes.transactions import router as transactions_router
 from app.config import Settings, get_settings
+from app.services.auth0_service import Auth0TokenVerifier
 from app.services.import_job_service import shutdown_import_jobs
 from app.services.startup_maintenance import run_startup_maintenance
 
@@ -49,6 +50,7 @@ def create_app(
         lifespan=lifespan or create_lifespan(),
     )
     application.state.settings = settings
+    application.state.auth0_verifier = Auth0TokenVerifier(settings)
     application.include_router(auth_router, prefix="/api")
     application.include_router(health_router, prefix="/api")
 

@@ -19,8 +19,8 @@ def assign_test_workspace(session: Session, _flush_context, _instances) -> None:
     connection = session.connection()
     connection.exec_driver_sql(
         "INSERT OR IGNORE INTO users "
-        "(id, email, display_name, password_hash) VALUES "
-        "(1, 'test-owner@example.com', 'Test Owner', 'test-placeholder')"
+        "(id, auth0_subject, email, display_name) VALUES "
+        "(1, 'auth0|test-owner', 'test-owner@example.com', 'Test Owner')"
     )
     connection.exec_driver_sql(
         "INSERT OR IGNORE INTO workspaces "

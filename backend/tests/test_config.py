@@ -24,28 +24,32 @@ def test_invalid_environment_is_rejected(monkeypatch) -> None:
         get_settings()
 
 
-def test_render_external_url_is_the_default_public_url(monkeypatch) -> None:
-    monkeypatch.delenv("PUBLIC_APP_URL", raising=False)
-    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://expense-app.onrender.com")
+def test_auth0_configuration_is_loaded(monkeypatch) -> None:
+    monkeypatch.setenv("AUTH0_DOMAIN", "tenant.eu.auth0.com")
+    monkeypatch.setenv("AUTH0_CLIENT_ID", "client-id")
+    monkeypatch.setenv("AUTH0_AUDIENCE", "https://api.example.com")
 
     settings = get_settings()
 
-    assert settings.public_app_url == "https://expense-app.onrender.com"
+    assert settings.auth0_domain == "tenant.eu.auth0.com"
+    assert settings.auth0_client_id == "client-id"
+    assert settings.auth0_audience == "https://api.example.com"
 
 
-def test_public_url_overrides_render_external_url(monkeypatch) -> None:
-    monkeypatch.setenv("PUBLIC_APP_URL", "https://expenses.example.com")
-    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://expense-app.onrender.com")
+def test_auth0_domain_rejects_a_url(monkeypatch) -> None:
+    monkeypatch.setenv("AUTH0_DOMAIN", "https://tenant.auth0.com/")
 
-    settings = get_settings()
-
-    assert settings.public_app_url == "https://expenses.example.com"
+    with pytest.raises(ValueError, match="hostname"):
+        get_settings()
 
 
-def test_invalid_trusted_proxy_network_is_rejected(monkeypatch) -> None:
-    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "not-a-network")
+def test_production_rejects_placeholder_auth0_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("AUTH0_DOMAIN", raising=False)
+    monkeypatch.delenv("AUTH0_CLIENT_ID", raising=False)
+    monkeypatch.delenv("AUTH0_AUDIENCE", raising=False)
 
-    with pytest.raises(ValueError, match="TRUSTED_PROXY_CIDRS"):
+    with pytest.raises(ValueError, match="Production Auth0"):
         get_settings()
 
 

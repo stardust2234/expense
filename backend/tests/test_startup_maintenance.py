@@ -20,9 +20,9 @@ def workspace_session_factory():
     with factory() as session:
         for index, name in enumerate(("First", "Second", "Third"), start=1):
             owner = User(
+                auth0_subject=f"auth0|owner{index}",
                 email=f"owner{index}@example.com",
                 display_name=f"Owner {index}",
-                password_hash="argon2id-placeholder",
             )
             session.add(Workspace(name=name, is_claimed=True, owner=owner))
         session.commit()

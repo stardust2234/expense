@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@auth0/auth0-vue": "^2.9.0",
     "@intlify/devtools-types": "11.1.12",
     "@lucide/vue": "^1.28.0",
     "plotly.js-basic-dist-min": "^3.7.0",

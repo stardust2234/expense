@@ -1,90 +1,64 @@
-# Authentication strategy
+# Auth0 authentication and workspace isolation
 
-## Current boundary
+## Trust boundary
 
-The backend supports Argon2id password registration and login, verified email addresses, password
-recovery, hashed opaque server sessions, CSRF tokens, logout/revocation, account deletion, audit
-logging, and atomic initial-owner claiming of the migrated workspace.
-Production access must pass through Caddy over HTTPS so the secure session cookie is transmitted.
+Auth0 owns registration, login, password recovery, email verification, MFA and identity sessions.
+The Vue application uses Auth0 Universal Login and requests an access token for the configured API
+audience. The FastAPI application accepts only RS256 bearer access tokens whose signature, issuer,
+audience and lifetime validate against the tenant's JWKS endpoint.
 
-User, opaque-session, workspace and persistent login-throttle tables are present. All
-pre-existing financial records belong to one initial workspace, ownership is non-null, and the
-first registered owner atomically claims that workspace. Protected API requests, exports,
-inference and worker processing are scoped through the authenticated workspace.
+Auth0 authentication does not replace application authorization. The API maps the immutable token
+`sub` claim to `users.auth0_subject`. Each local user owns exactly one workspace through the unique
+`workspaces.owner_user_id` relationship, and all financial queries, mutations, imports, workers,
+inference and exports remain scoped to that workspace.
 
-Routing is client-side navigation, not an access-control boundary. Every API endpoint must enforce
-authentication and authorisation independently before protected routes are added to the frontend.
+## Required Auth0 configuration
 
-## Implemented session model
+Create an Auth0 Single Page Application and an Auth0 API. Configure the API identifier to exactly
+match `AUTH0_AUDIENCE` and keep its signing algorithm as RS256. Configure the SPA with the exact
+application origins in Allowed Callback URLs, Allowed Logout URLs and Allowed Web Origins.
 
-Use server-managed sessions for every workspace:
+Add a post-login Action that emits verified identity details into namespaced access-token claims:
 
-- store an application user with an Argon2id password hash;
-- issue a cryptographically random, opaque session identifier after login;
-- store only a hash of that identifier in SQLite, with creation, last-used, and expiry timestamps;
-- send the identifier in a `Secure`, `HttpOnly`, `SameSite=Lax` cookie;
-- rotate the session after login, invalidate it on logout, and revoke other sessions after a
-  password change;
-- require a CSRF token for every state-changing request;
-- reuse a valid authenticated CSRF token so one browser tab cannot invalidate another;
-- rate-limit login and email actions with both identity-plus-IP and aggregate-IP buckets, without
-  storing plaintext email/IP throttle identities or logging
-  credentials, cookies, uploaded statement contents, or CSRF tokens.
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  if (!event.user.email_verified) return;
+  api.accessToken.setCustomClaim("https://folio.app/email", event.user.email);
+  api.accessToken.setCustomClaim(
+    "https://folio.app/name",
+    event.user.name || event.user.email,
+  );
+};
+```
 
-Do not keep bearer tokens or session identifiers in `localStorage`. The frontend should call
-`GET /api/auth/session` when it starts, redirect unauthenticated navigation to `/login`, and preserve
-the intended local URL for navigation after a successful login. A `401` response should clear
-client session state and return to login; a `403` should remain distinct and show an access-denied
+The claim names must match `AUTH0_EMAIL_CLAIM` and `AUTH0_NAME_CLAIM`. The API refuses to provision
+a workspace without the trusted email claim. Existing local owners are linked once by matching
+that claim to their unique email; all later requests use `sub`, so changing an Auth0 email cannot
+move a user between workspaces.
+
+## Client and token handling
+
+The frontend loads public tenant configuration from `GET /api/auth/config`, redirects through
+Universal Login and obtains tokens with the Auth0 Vue SDK. Tokens use the SDK's in-memory cache and
+are attached as `Authorization: Bearer` headers. No token is stored in application local storage or
+in an application cookie. `GET /api/auth/me` returns only the local workspace profile and trial
 state.
 
-Implemented authentication and account endpoints are:
+The configured Auth0 origin is the only additional CSP `connect-src`. Caddy terminates application
+HTTPS; Auth0 terminates identity flows. Local password, verification email, reset-token, session,
+CSRF, throttle and SMTP tables/endpoints no longer exist.
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/session`
-- `GET /api/auth/csrf`
-- `POST /api/auth/verify-email`
-- `POST /api/auth/verification/resend`
-- `POST /api/auth/password-reset/request`
-- `POST /api/auth/password-reset/confirm`
-- `POST /api/auth/password/change`
-- `PATCH /api/auth/account/email`
-- `DELETE /api/auth/account`
-- `GET /api/auth/sessions`
-- `DELETE /api/auth/sessions/id/{session_id}`
-- `POST /api/auth/sessions/revoke-others`
-- `GET /api/auth/account/audit`
+## Operational checklist
 
-Email address changes are staged in `pending_email`. The current login address remains valid until
-the new address proves ownership with its single-use token. A production delivery failure clears
-the pending address rather than locking the user out. Database uniqueness conflicts are returned as
-controlled `409` responses.
+- Use separate Auth0 tenants/applications for development and production.
+- Enter Auth0 values through deployment secrets; never commit tenant credentials.
+- Require verified emails in the Auth0 connection or Action before emitting the email claim.
+- Enable Auth0 brute-force and suspicious-IP protections; add MFA appropriate to the deployment.
+- Keep callback, logout and web-origin allowlists exact, with no wildcard production origins.
+- Test expired, wrong-issuer, wrong-audience and unsigned tokens as well as cross-workspace IDs.
+- Encrypt and test restoration of the SQLite database and protect Auth0 tenant administrators.
+- Do not run multiple API instances against one SQLite file.
 
-## Workspace ownership
-
-Ownership covers import batches/background jobs, raw transactions, expenses, merchants, aliases,
-rules, categories, plans, commitments, allowances and recurring opportunities. Global ORM policy
-scopes reads, ID lookups, updates and deletes; worker sessions adopt the claimed batch workspace.
-Cross-user tests prove that listing and guessed-ID mutation cannot cross the workspace boundary.
-
-Each account directly owns one private workspace through `workspaces.owner_user_id`. The owner
-relationship is unique in both directions; there are no workspace roles or shared memberships.
-
-## Later options
-
-OIDC or passkeys can replace password login when stronger identity assurance is needed. Keep the
-same application session cookie after the external identity exchange so identity-provider tokens
-do not reach browser storage. Add MFA and a tested recovery process before relying on the
-application for internet-facing financial data.
-
-## Deployment checklist
-
-- Terminate HTTPS at Caddy and trust forwarded headers only from that proxy.
-- Keep signing keys and bootstrap credentials outside source control and rotate them.
-- Set restrictive content-security, framing, referrer, and MIME-sniffing headers.
-- Encrypt and test restoration of database backups.
-- Apply session expiry, idle timeout, revocation, and login throttling.
-- Test CSRF, session fixation, logout, cross-user object access, and background-job ownership.
-- Only then enable frontend route guards and expose the service beyond a trusted local network.
+Account deletion or other Auth0 tenant administration requires a separately protected backend use
+of the Auth0 Management API. Management API credentials must never be exposed to the SPA.
 
