@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAuth0 } from "@auth0/auth0-vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
@@ -9,7 +10,6 @@ import {
   Gauge,
   Landmark,
   ListFilter,
-  LogOut,
   UserRound,
   ReceiptText,
   Scale,
@@ -19,16 +19,20 @@ import {
 } from "@lucide/vue";
 
 import { api } from "./api/client";
-import { auth } from "./auth";
+import LogoutButton from "./components/LogoutButton.vue";
 import { setAppLocale, type AppLocale } from "./i18n";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 
 const apiOnline = ref(false);
 const healthState = ref<"connecting" | "ready" | "degraded" | "offline">("connecting");
 const { d, locale, t } = useI18n();
 const healthLabel = computed(() => t(`health.${healthState.value}`));
 const route = useRoute();
-const router = useRouter();
+const {
+  isAuthenticated,
+  isLoading: auth0Loading,
+  user,
+} = useAuth0();
 const isAuthPage = computed(() => route.meta.authLayout === true);
 const accountMenuOpen = ref(false);
 const accountMenu = ref<HTMLElement | null>(null);
@@ -54,12 +58,6 @@ function closeAccountMenu(event?: MouseEvent) {
   accountMenuOpen.value = false;
 }
 
-async function signOut() {
-  accountMenuOpen.value = false;
-  await auth.logout();
-  await router.replace("/login");
-}
-
 onMounted(async () => {
   document.addEventListener("click", closeAccountMenu);
   try {
@@ -76,7 +74,12 @@ onBeforeUnmount(() => document.removeEventListener("click", closeAccountMenu));
 
 <template>
   <RouterView v-if="isAuthPage" />
-  <div v-else class="app-shell">
+
+  <main v-else-if="auth0Loading" class="login-page" aria-live="polite">
+    <section class="login-card"><p>{{ t("auth.loading") }}</p></section>
+  </main>
+
+  <div v-else-if="isAuthenticated && user" class="app-shell">
     <aside class="sidebar">
       <div class="brand">
         <span class="brand-mark"><Landmark :size="21" :stroke-width="1.5" /></span>
@@ -119,6 +122,7 @@ onBeforeUnmount(() => document.removeEventListener("click", closeAccountMenu));
               <UserRound :size="19" :stroke-width="1.5" />
             </button>
             <div v-if="accountMenuOpen" class="account-dropdown" role="menu">
+              <p class="account-identity">{{ user.email }}</p>
               <RouterLink to="/account" role="menuitem" @click="accountMenuOpen = false">
                 <UserRound :size="17" :stroke-width="1.5" /> {{ t("account.profile") }}
               </RouterLink>
@@ -126,9 +130,11 @@ onBeforeUnmount(() => document.removeEventListener("click", closeAccountMenu));
                 <span class="locale-switch">{{ locale === "en" ? "ENG" : "FR" }}</span>
                 {{ locale === "en" ? "FR" : "ENG" }}
               </button>
-              <button class="logout-menu-item" type="button" role="menuitem" @click="signOut">
-                <LogOut :size="17" :stroke-width="1.5" /> {{ t("auth.logout") }}
-              </button>
+              <LogoutButton
+                class="logout-menu-item"
+                role="menuitem"
+                @logout-started="accountMenuOpen = false"
+              />
             </div>
           </div>
         </div>
@@ -137,5 +143,12 @@ onBeforeUnmount(() => document.removeEventListener("click", closeAccountMenu));
       <RouterView />
     </main>
   </div>
+
+  <main v-else class="login-page">
+    <section class="login-card">
+      <p>{{ t("auth.auth0Help") }}</p>
+      <RouterLink class="primary-action" to="/login">{{ t("auth.login") }}</RouterLink>
+    </section>
+  </main>
 </template>
 

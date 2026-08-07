@@ -26,18 +26,11 @@ services:
       APP_NAME: ${APP_NAME:-expense-categoriser}
       APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/expense.db}
-      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
-      AUTH_SESSION_DAYS: ${AUTH_SESSION_DAYS:-7}
-      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
-      AUTH_THROTTLE_SECRET: ${AUTH_THROTTLE_SECRET:?set AUTH_THROTTLE_SECRET in .env}
-      ADMIN_BOOTSTRAP_SECRET: ${ADMIN_BOOTSTRAP_SECRET:-}
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?set PUBLIC_APP_URL}
-      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:?set AUTH0_DOMAIN in .env}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?set AUTH0_CLIENT_ID in .env}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE:?set AUTH0_AUDIENCE in .env}
+      AUTH0_EMAIL_CLAIM: ${AUTH0_EMAIL_CLAIM:-https://folio.app/email}
+      AUTH0_NAME_CLAIM: ${AUTH0_NAME_CLAIM:-https://folio.app/name}
     volumes:
       - ../../data:/data
     healthcheck:
@@ -69,6 +62,7 @@ services:
       - "${CADDY_BIND_ADDRESS:-0.0.0.0}:${CADDY_HTTPS_PORT:-443}:443/udp"
     environment:
       CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:?set CADDY_SITE_ADDRESS to the public hostname}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:?set AUTH0_DOMAIN in .env}
     volumes:
       - caddy_data:/data
       - caddy_config:/config

@@ -95,26 +95,12 @@ Statement import accepts CSV and XLSX directly. Text-based PDFs are supported wh
 produces a comma- or tab-delimited table; scanned or unstructured PDFs must be converted before
 upload to avoid unreliable financial parsing.
 
-The application uses Argon2id passwords, opaque server-side sessions, CSRF protection, verified
-email addresses, and workspace-scoped financial data. Public authentication pages are separated
-from the protected workspace shell, while every API remains responsible for its own authentication
-and authorisation boundary. Account owners can change passwords and email addresses, delete their
-workspace, and inspect account audit events.
+Auth0 Universal Login owns registration, login, email verification, recovery and identity sessions.
+FastAPI validates RS256 access tokens against the configured issuer, audience and JWKS. The immutable
+Auth0 `sub` maps to a local user, and each user directly owns one workspace through the unique
+`workspaces.owner_user_id` relationship; there are no workspace roles or shared memberships. Every
+financial API and background worker still applies the local workspace authorization boundary.
 Operational details are documented in `docs/authentication-strategy.md`.
-
-Email verification and password recovery use a certificate-verified SMTP STARTTLS connection.
-Deployment operators can probe SMTP readiness and send a real test before registration is enabled;
-the signed-in owner can repeat both checks without choosing an arbitrary recipient. Delivery-test
-failures return a generic service-unavailable response while detailed provider errors remain in
-server logs, and successful tests are written to the workspace audit log.
-
-Each user directly owns one workspace through the unique `workspaces.owner_user_id` relationship;
-there are no workspace roles or shared memberships. Email-token creation is committed by the route before delivery,
-and blocking SMTP calls run outside the async event loop. Password-reset and verification-resend
-requests share persistent, purpose-separated throttling. Identity-specific and aggregate-IP
-buckets prevent account or email rotation from bypassing abuse limits. Login and registration client addresses
-are accepted from `X-Forwarded-For` only when the direct peer belongs to an explicitly configured
-trusted proxy network.
 
 Safe-spending planning is stored separately from imported bank data. Categories provide a default
 spending priority and individual expenses may override it. Payment cycles hold the expected income

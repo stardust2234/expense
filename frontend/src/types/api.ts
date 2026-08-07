@@ -315,15 +315,8 @@ export interface AuthUser {
   email: string;
   display_name: string;
   workspace_id: number;
-  email_verified: boolean;
   trial_ends_at: string;
   access_expires_at: string | null;
   access_active: boolean;
-}
-
-export interface AuthSession {
-  user: AuthUser;
-  expires_at: string;
-  csrf_token: string | null;
 }
 

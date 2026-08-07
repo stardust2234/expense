@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { createMemoryHistory } from "vue-router";
 
 import { createAppRouter, routes } from "./router";
-import { auth } from "./auth";
 
 describe("application routes", () => {
   it("defines a named route for every workspace area", () => {
@@ -12,8 +11,6 @@ describe("application routes", () => {
       "/",
       "/login",
       "/register",
-      "/verify-email",
-      "/reset-password",
       "/dashboard",
       "/account",
       "/imports",
@@ -60,17 +57,16 @@ describe("application routes", () => {
   });
 
   it("redirects an expired trial to pricing but leaves account access available", async () => {
-    auth.setSession({
+    let currentUser = {
       id: 1,
       email: "person@example.com",
       display_name: "Person",
       workspace_id: 1,
-      email_verified: true,
       trial_ends_at: "2026-01-01T00:00:00Z",
       access_expires_at: null,
       access_active: false,
-    });
-    const router = createAppRouter(createMemoryHistory(), async () => true);
+    };
+    const router = createAppRouter(createMemoryHistory(), async () => true, () => currentUser);
 
     await router.push("/reports");
     expect(router.currentRoute.value.name).toBe("landing");
@@ -78,7 +74,7 @@ describe("application routes", () => {
 
     await router.push("/account");
     expect(router.currentRoute.value.name).toBe("account");
-    auth.setSession({ ...auth.user.value!, access_active: true });
+    currentUser = { ...currentUser, access_active: true };
   });
 
   it("handles errors raised while checking a route session", async () => {

@@ -1,14 +1,33 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
-from app.api.routes.account_audit import router as account_audit_router
-from app.api.routes.account_management import router as account_management_router
-from app.api.routes.account_recovery import router as account_recovery_router
-from app.api.routes.auth_sessions import router as auth_sessions_router
-from app.api.routes.email_diagnostics import router as email_diagnostics_router
+from app.api.auth_dependencies import CurrentAuth
+from app.schemas.auth import AuthenticatedUser
+from app.services.workspace_access_service import workspace_access_active
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-router.include_router(auth_sessions_router)
-router.include_router(account_recovery_router)
-router.include_router(account_management_router)
-router.include_router(account_audit_router)
-router.include_router(email_diagnostics_router)
+
+
+@router.get("/config")
+async def auth0_config(request: Request) -> dict[str, str]:
+    settings = request.app.state.settings
+    return {
+        "domain": settings.auth0_domain,
+        "client_id": settings.auth0_client_id,
+        "audience": settings.auth0_audience,
+    }
+
+
+@router.get("/me", response_model=AuthenticatedUser)
+async def authenticated_user(auth: CurrentAuth) -> AuthenticatedUser:
+    workspace = auth.user.workspace
+    if workspace is None:
+        raise RuntimeError("Authenticated Auth0 user has no workspace")
+    return AuthenticatedUser(
+        id=auth.user.id,
+        email=auth.user.email,
+        display_name=auth.user.display_name,
+        workspace_id=workspace.id,
+        trial_ends_at=workspace.trial_ends_at,
+        access_expires_at=workspace.access_expires_at,
+        access_active=workspace_access_active(workspace),
+    )

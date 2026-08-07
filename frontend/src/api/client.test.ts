@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, resetApiSecurityState } from "./client";
+import { setAccessTokenProvider } from "./request";
 
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -10,7 +11,10 @@ function jsonResponse(payload: unknown, status = 200) {
 }
 
 describe("financial-plan API contract", () => {
-  beforeEach(() => resetApiSecurityState());
+  beforeEach(() => {
+    resetApiSecurityState();
+    setAccessTokenProvider(async () => "test-access-token");
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -69,22 +73,21 @@ describe("financial-plan API contract", () => {
       },
     },
   ])("PATCHes $path using the backend field names", async ({ invoke, path, body }) => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ csrf_token: "test-csrf" }))
-      .mockResolvedValueOnce(jsonResponse({}));
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}));
     vi.stubGlobal("fetch", fetchMock);
 
     await invoke();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(path);
     expect(init).toMatchObject({
       method: "PATCH",
-      credentials: "same-origin",
     });
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
-    expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("test-csrf");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer test-access-token",
+    );
     expect(JSON.parse(String(init.body))).toEqual(body);
   });
 
@@ -102,18 +105,18 @@ describe("financial-plan API contract", () => {
       path: "/api/reports/recurring-opportunities/11",
     },
   ])("DELETEs $path", async ({ invoke, path }) => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ csrf_token: "test-csrf" }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await invoke();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(path);
     expect(init.method).toBe("DELETE");
-    expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("test-csrf");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer test-access-token",
+    );
   });
 });
 

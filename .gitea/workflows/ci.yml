@@ -10,6 +10,11 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      APP_ENV: test
+      AUTH0_DOMAIN: ci-tenant.example.auth0.com
+      AUTH0_CLIENT_ID: ci-spa-client
+      AUTH0_AUDIENCE: https://api.ci.folio.example
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,9 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      AUTH_THROTTLE_SECRET: ci-only-auth-throttle-secret-at-least-32-characters
-      PUBLIC_APP_URL: https://localhost
-      MAIL_FROM: noreply@localhost
+      AUTH0_DOMAIN: ci-tenant.example.auth0.com
+      AUTH0_CLIENT_ID: ci-spa-client
+      AUTH0_AUDIENCE: https://api.ci.folio.example
       CADDY_SITE_ADDRESS: localhost
     steps:
       - name: Checkout

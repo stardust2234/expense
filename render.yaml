@@ -16,28 +16,16 @@ services:
         value: production
       - key: DATABASE_URL
         value: sqlite:////data/expense.db
-      - key: ALLOW_REGISTRATION
-        value: "true"
-      - key: AUTH_COOKIE_SECURE
-        value: "true"
-      - key: AUTH_SESSION_DAYS
-        value: "7"
-      - key: TRUSTED_PROXY_CIDRS
-        value: "127.0.0.1/32,::1/128,10.0.0.0/8"
-      - key: AUTH_THROTTLE_SECRET
-        generateValue: true
-      - key: ADMIN_BOOTSTRAP_SECRET
-        generateValue: true
-      - key: MAIL_FROM
+      - key: AUTH0_DOMAIN
         sync: false
-      - key: SMTP_HOST
+      - key: AUTH0_CLIENT_ID
         sync: false
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USERNAME
+      - key: AUTH0_AUDIENCE
         sync: false
-      - key: SMTP_PASSWORD
-        sync: false
+      - key: AUTH0_EMAIL_CLAIM
+        value: https://folio.app/email
+      - key: AUTH0_NAME_CLAIM
+        value: https://folio.app/name
     disk:
       name: expense-data
       mountPath: /data

@@ -13,6 +13,7 @@ DOCKER_COMPOSE ?= docker compose
 COMPOSE_FILE ?= infra/compose/docker-compose.yml
 COMPOSE_ENV_FILE ?= $(CURDIR)/.env
 COMPOSE_ENV_ARGS = $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),)
+BACKEND_ENV_ARGS = $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file ../.env,)
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -51,16 +52,16 @@ smoke-test: ## Verify the full stack through Caddy and the API health endpoint
 	@DOCKER_COMPOSE='$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS)' COMPOSE_FILE='$(COMPOSE_FILE)' bash scripts/smoke-test.sh
 
 backend-run: ## Start the FastAPI app locally
-	@cd backend && AUTH_COOKIE_SECURE=true $(PYTHON) -m uvicorn app.main:app --reload
+	@cd backend && $(PYTHON) -m uvicorn app.main:app --reload $(BACKEND_ENV_ARGS)
 
 database-upgrade: ## Apply all pending database migrations
-	@cd backend && $(PYTHON) -m alembic upgrade head
+	@cd backend && set -a && if [[ -f ../.env ]]; then source ../.env; fi && set +a && $(PYTHON) -m alembic upgrade head
 
 database-downgrade: ## Revert the most recent database migration
-	@cd backend && $(PYTHON) -m alembic downgrade -1
+	@cd backend && set -a && if [[ -f ../.env ]]; then source ../.env; fi && set +a && $(PYTHON) -m alembic downgrade -1
 
 database-seed: ## Add the default category taxonomy
-	@cd backend && $(PYTHON) -m app.seed
+	@cd backend && set -a && if [[ -f ../.env ]]; then source ../.env; fi && set +a && $(PYTHON) -m app.seed
 
 database-check: ## Apply migrations to a clean SQLite database and detect model drift
 	@MIGRATION_PYTHON="$(PYTHON)" bash scripts/check-migrations.sh
@@ -96,14 +97,11 @@ frontend-build: ## Build the frontend bundle
 	@cd frontend && npm run build
 
 frontend-audit: ## Fail on high or critical npm vulnerabilities
-	@cd frontend && npm audit --audit-level=high
+	@cd frontend && npm audit --package-lock-only --audit-level=high
 
 dependency-audit: ## Audit Python and JavaScript dependencies
 	@$(MAKE) backend-audit
 	@$(MAKE) frontend-audit
-
-email-check: ## Probe SMTP and send a test message (EMAIL_TO is optional)
-	@$(DOCKER_COMPOSE) $(COMPOSE_ENV_ARGS) -f $(COMPOSE_FILE) exec -T api python -m app.email_check $(if $(EMAIL_TO),--to "$(EMAIL_TO)",)
 
 .PHONY: git-help branch-sync promote-main
 
